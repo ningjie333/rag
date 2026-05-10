@@ -23,9 +23,13 @@ interface MockBook {
 }
 
 const books = ref<MockBook[]>([
-  { id: '1', title: '兽医生理学（第5版）', chunkCount: 156, selected: true },
-  { id: '2', title: '兽医诊断学（第3版）', chunkCount: 203, selected: true },
-  { id: '3', title: '兽医内科学（第4版）', chunkCount: 178, selected: true },
+  { id: '1', title: '01_局部解剖学', chunkCount: 620, selected: true },
+  { id: '2', title: '02_组织学与胚胎学', chunkCount: 122, selected: true },
+  { id: '3', title: '03_生理学', chunkCount: 170, selected: true },
+  { id: '4', title: '04_医学微生物学', chunkCount: 1202, selected: true },
+  { id: '5', title: '05_病理学', chunkCount: 188, selected: true },
+  { id: '6', title: '06_传染病学', chunkCount: 1119, selected: true },
+  { id: '7', title: '07_病理生理学', chunkCount: 97, selected: true },
 ])
 
 const nodeCount = ref(127)

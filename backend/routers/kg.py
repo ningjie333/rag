@@ -1,10 +1,11 @@
 """GET /api/graph — 知识图谱查询 & 构建"""
+import asyncio
 import structlog
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 
 from models.schemas import GraphResponse, KGNode, KGEdge
-from vector_store.kg_extractor import extract_knowledge_graph, store_knowledge_graph, get_full_graph
+from vector_store.kg_extractor import extract_knowledge_graph, extract_knowledge_graph_batch, store_knowledge_graph, get_full_graph
 from vector_store.relation_inferrer import infer_all_relations, remove_cycles, merge_duplicate_concepts, dual_align_concepts
 from vector_store.chroma_client import get_or_create_collection
 
@@ -85,19 +86,12 @@ async def build_graph(book_title: str = Query(..., description="教材标题")):
 
         log.info("building_graph", chunk_count=len(chunks))
 
-        # 1. 提取知识点
-        all_nodes = []
-        all_edges = []
-        for chunk in chunks:
-            kg_data = await extract_knowledge_graph(
-                chunk["text"],
-                source=chunk["metadata"].get("source", book_title),
-            )
-            # 给节点添加 source
-            for node in kg_data.get("nodes", []):
-                node["source"] = book_title
-            all_nodes.extend(kg_data.get("nodes", []))
-            all_edges.extend(kg_data.get("edges", []))
+        # 1. 并行提取知识点（多 agent 架构）
+        all_nodes, all_edges = await extract_knowledge_graph_batch(
+            chunks,
+            book_title,
+            max_concurrency=5,
+        )
 
         log.info("extraction_done", node_count=len(all_nodes), edge_count=len(all_edges))
 
@@ -137,7 +131,127 @@ async def build_graph(book_title: str = Query(..., description="教材标题")):
         raise HTTPException(status_code=500, detail=f"图谱构建失败: {str(e)}")
 
 
-@router.post("/graph/merge")
+@router.post("/graph/build-all")
+async def build_all_graphs(
+    max_concurrent_books: int = Query(3, description="最多同时处理几本教材"),
+    target_ratio: float = Query(0.3, description="跨教材压缩比"),
+):
+    """
+    多 agent 并行架构：同时构建所有教材的知识图谱。
+
+    1. 获取所有教材列表
+    2. 并行触发每本教材的图谱构建（最多 max_concurrent_books 本同时）
+    3. 等待所有教材完成
+    4. 跨教材合并 + 压缩
+    """
+    log.info("build_all_request", max_concurrent_books=max_concurrent_books)
+
+    try:
+        # 获取所有教材
+        collection = get_or_create_collection("textbook_chunks")
+        results = collection.get(include=["documents", "metadatas"])
+
+        if not results or not results.get("documents"):
+            raise HTTPException(status_code=404, detail="没有找到任何教材")
+
+        # 按 book_title 分组
+        book_chunks: dict[str, list] = {}
+        for doc, meta in zip(results["documents"], results["metadatas"]):
+            title = meta.get("book_title", "unknown")
+            if title not in book_chunks:
+                book_chunks[title] = []
+            book_chunks[title].append({
+                "text": doc,
+                "metadata": meta,
+            })
+
+        log.info("books_discovered", book_count=len(book_chunks), books=list(book_chunks.keys()))
+
+        # 并行构建每本教材的图谱
+        semaphore = asyncio.Semaphore(max_concurrent_books)
+
+        async def build_single_book(title: str, chunks: list) -> dict:
+            async with semaphore:
+                log.info("building_single_book", book=title, chunks=len(chunks))
+                nodes, edges = await extract_knowledge_graph_batch(
+                    chunks, title, max_concurrency=5
+                )
+                # 合并重复
+                merged = merge_duplicate_concepts(nodes)
+                # 推理关系
+                relations = await infer_all_relations(merged)
+                relations = remove_cycles(relations, merged)
+                # 存储
+                kg_data = {"nodes": merged, "edges": relations}
+                store_knowledge_graph(kg_data, title)
+                log.info("book_done", book=title, nodes=len(merged), edges=len(relations))
+                return {
+                    "book": title,
+                    "chunks": len(chunks),
+                    "nodes": len(merged),
+                    "edges": len(relations),
+                }
+
+        # 创建所有任务
+        tasks = [
+            build_single_book(title, chunks)
+            for title, chunks in book_chunks.items()
+        ]
+
+        # 并行执行
+        book_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 统计成功/失败
+        successful = []
+        failed = []
+        for i, result in enumerate(book_results):
+            title = list(book_chunks.keys())[i]
+            if isinstance(result, Exception):
+                failed.append({"book": title, "error": str(result)})
+            else:
+                successful.append(result)
+
+        log.info("all_books_done", successful=len(successful), failed=len(failed))
+
+        # 跨教材合并 + 压缩
+        all_graphs = get_full_graph()
+        all_nodes = all_graphs.get("nodes", [])
+        all_edges = all_graphs.get("edges", [])
+
+        merged_nodes = merge_duplicate_concepts(all_nodes)
+        original_count = len(all_nodes)
+        merged_count = len(merged_nodes)
+
+        # 按压缩比裁剪
+        target_count = int(original_count * target_ratio) if original_count > 0 else 0
+        if merged_count > target_count:
+            merged_nodes.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+            merged_nodes = merged_nodes[:target_count]
+
+        node_ids = {n.get("id") for n in merged_nodes}
+        all_edges = [e for e in all_edges if e.get("from") in node_ids and e.get("to") in node_ids]
+        all_edges = remove_cycles(all_edges, merged_nodes)
+
+        merged_graph = {"nodes": merged_nodes, "edges": all_edges}
+        store_knowledge_graph(merged_graph, "_merged_")
+
+        return {
+            "success": True,
+            "message": f"全部完成，成功 {len(successful)} 本，失败 {len(failed)} 本",
+            "books": successful,
+            "failed_books": failed,
+            "merged_graph": {
+                "total_nodes": len(merged_nodes),
+                "total_edges": len(all_edges),
+                "compression_ratio": round(merged_count / original_count, 2) if original_count else 1.0,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("build_all_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"全量构建失败: {str(e)}")
 async def merge_graphs(target_ratio: float = Query(0.3, description="目标压缩比")):
     """
     跨教材整合 + 压缩到目标比例（默认 30%）。

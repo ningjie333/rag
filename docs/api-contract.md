@@ -146,7 +146,7 @@ curl -s http://localhost:3002/health | jq .
 # 上传 PDF
 curl -s -X POST http://localhost:3002/api/upload \
   -F "file=@./sample.pdf" \
-  -F "book_title=兽医诊断学" | jq .
+  -F "book_title=医学诊断学" | jq .
 
 # 检索问答
 curl -s -X POST http://localhost:3002/api/query \
@@ -154,7 +154,7 @@ curl -s -X POST http://localhost:3002/api/query \
   -d '{"question": "心肌炎的诊断方法有哪些？"}' | jq .
 
 # 获取图谱
-curl -s "http://localhost:3002/api/graph?book_title=兽医诊断学" | jq .
+curl -s "http://localhost:3002/api/graph?book_title=医学诊断学" | jq .
 
 # 书籍列表
 curl -s http://localhost:3002/api/books | jq .

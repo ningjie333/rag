@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from models.schemas import ChatRequest, ChatResponse, ChatMessage, Citation
 from vector_store.query_engine import search_chunks
-from vector_store.kg_extractor import call_minimax, get_full_graph
+from vector_store.kg_extractor import call_llm, get_full_graph
 
 router = APIRouter()
 log = structlog.get_logger()
@@ -82,7 +82,7 @@ async def chat(req: ChatRequest, session_id: str = Query(default="default")):
         user_prompt += f"\n\n参考内容：\n{context}"
 
         # 7. 调用 LLM
-        answer = await call_minimax(user_prompt, system_prompt)
+        answer = await call_llm(user_prompt, system_prompt)
 
         # 8. 保存历史
         history.append(ChatMessage(role="user", content=last_question))

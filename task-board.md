@@ -227,6 +227,7 @@ FE-8 ◄────────────────────────
 | T-10 | 多视图切换（整合前后对比） | C-创新元素 | +2 | Graph.vue 有 toggle 按钮切换「图谱视图/整合对比」，并排显示 150→42 节点 | ✅ 完成 @05-10 |
 | T-11 | 搜索框 + 来源筛选 | C-交互 | +1.5 | Graph toolbar 有 input 搜索 + source 多选下拉，组合过滤节点 | ✅ 完成 @05-10 |
 | T-12 | 桑基图或时间轴（任选一） | C-创新元素 | +1 | 新增 Sankey 或 Timeline 视图（非 2D 图谱变体） | ✅ 完成 @05-10 |
+| UI-1 | QA/Chat 界面美化 | C-视觉 | +1 | Markdown 渲染 + 头像 + 卡片式布局 + 发送按钮重设计 | ✅ 完成 @05-10 |
 | T-13 | kg_extractor 真实 LLM 调用 | B-知识点提取 | +2 | extract_knowledge_graph() 真实调用 MiniMax API（非 stub），能返回非空 nodes | ✅ 完成 @12:45 |
 | T-14 | merge_duplicate_concepts 语义对齐 | B-整合算法 | +2.5 | relation_inferrer.py 有「label 编辑距离 <3 → 合并」或 embedding 语义匹配 | ✅ 完成 @12:45 |
 | T-15 | 单元测试 smoke test | E-代码规范 | +1 | tests/test_smoke.py 用 TestClient 调 /health 和 /api/books | ✅ 完成 @13:xx |
@@ -236,7 +237,7 @@ FE-8 ◄────────────────────────
 | 任务ID | 描述 | 来源分 | 预计得分 | 验收标准 | 状态 |
 |--------|------|--------|---------|----------|------|
 | T-20 | 补全 Embedding 模型选型说明 | D-RAG设计 | +1.5 | 文档明确说 P0 用 bge-small-zh-v1.5，P1 用 bge-base-zh-v1.5 | ✅ 完成 @13:xx |
-| T-21 | docker-compose 启动验证 | E-部署配置 | +1.5 | 验证 docker-compose up --build 能起两个容器，端口映射正确 | ⏳ |
+| T-21 | docker-compose 启动验证 | E-部署配置 | +1.5 | 验证 docker-compose up --build 能起两个容器，端口映射正确 | ✅ 完成 @05-10 |
 | T-22 | README 截图整合报告 | F-创新 | +1 | README 有截图显示前端 /report 渲染结果 | ⏳ |
 | T-23 | 类型注解补全 | E-代码规范 | +0.5 | routers/ 下所有函数有完整 type hints | ⏳ |
 | T-24 | Prompt 工程加 few-shot | D-Prompt | +1 | RAG prompt 有完整 few-shot 示例在文档中 | ✅ 完成 @13:xx |
@@ -253,5 +254,15 @@ FE-8 ◄────────────────────────
 | D 架构 | 10.5 | 20 | 9.5 | T-01, T-04, T-20 |
 | E 代码 | 6.5 | 17 | 10.5 | T-15, T-21, T-23 |
 | F 创新 | 4 | 10 | 6 | T-10, T-12, T-22 |
+
+---
+
+## 🚀 部署基建任务（T-DEPLOY）
+
+| 任务ID | 描述 | 状态 | 产出文件 |
+|--------|------|------|----------|
+| T-DEPLOY-1 | docker-compose health check | ✅ 完成 @05-10 | docker-compose.yml + Dockerfile.backend（安装 curl） |
+| T-DEPLOY-2 | docker-compose.override.yml（开发环境） | ✅ 完成 @05-10 | docker-compose.override.yml |
+| T-DEPLOY-3 | 前后端分离启动脚本 | ✅ 完成 @05-10 | scripts/start_backend.sh + scripts/start_frontend.sh |
 
 **理论最高可加：~35-40 分**（T-01 到 T-15 做完可接近满分）

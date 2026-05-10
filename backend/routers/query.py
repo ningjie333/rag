@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 
 from models.schemas import QueryRequest, QueryResponse, Citation
 from vector_store.query_engine import search_chunks, get_graph_context
-from vector_store.kg_extractor import call_minimax
+from vector_store.kg_extractor import call_llm
 
 router = APIRouter()
 log = structlog.get_logger()
@@ -80,7 +80,7 @@ async def query_question(req: QueryRequest, book_title: str = Query(None)):
             context=context,
             graph_section=graph_section,
         )
-        answer = await call_minimax(user_prompt, RAG_SYSTEM)
+        answer = await call_llm(user_prompt, RAG_SYSTEM)
 
         return QueryResponse(
             answer=answer,

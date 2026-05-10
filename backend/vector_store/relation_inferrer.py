@@ -32,6 +32,43 @@ RELATION_TYPES = {
 }
 
 
+async def call_llm(prompt: str, system: str = "") -> str:
+    """通用 LLM 调用，支持 OpenAI / MiniMax"""
+    if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY:
+        return await call_openai(prompt, system)
+    elif settings.MINIMAX_API_KEY and settings.MINIMAX_API_KEY not in ("your_api_key_here", "sk-...", ""):
+        return await call_minimax(prompt, system)
+    else:
+        log.warning("No valid LLM API key configured")
+        return '{"relationships": []}'
+
+
+async def call_openai(prompt: str, system: str = "") -> str:
+    """调用 OpenAI-compatible API"""
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.OPENAI_MODEL,
+        "messages": (
+            [{"role": "system", "content": system}]
+            if system
+            else []
+        ) + [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+    }
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        resp = await client.post(
+            f"{settings.OPENAI_BASE_URL}/chat/completions",
+            headers=headers,
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
+
 async def call_minimax(prompt: str, system: str = "") -> str:
     """调用 MiniMax API"""
     if not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", ""):
@@ -152,7 +189,7 @@ async def infer_relations_between_pair(
     )
 
     try:
-        raw = await call_minimax(prompt, RELATION_INFER_SYSTEM)
+        raw = await call_llm(prompt, RELATION_INFER_SYSTEM)
         raw_clean = re.sub(r"^```json\s*", "", raw.strip())
         raw_clean = re.sub(r"\s*```$", "", raw_clean.strip())
         data = json.loads(raw_clean)

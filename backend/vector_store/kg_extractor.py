@@ -1,7 +1,8 @@
 """LLM 知识点提取器 v2
 
-升级：7类别枚举 + 强 prompt 约束 + few-shot 示例 + 低价值 chunk 过滤
+升级：7类别枚举 + 强 prompt 约束 + few-shot 示例 + 低价值 chunk 过滤 + 多 agent 并行
 """
+import asyncio
 import hashlib
 import json
 import re
@@ -26,7 +27,7 @@ async def call_llm(prompt: str, system: str = "") -> str:
     if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY:
         return await call_openai(prompt, system)
     elif settings.MINIMAX_API_KEY and settings.MINIMAX_API_KEY not in ("your_api_key_here", "sk-...", ""):
-        return await call_llm(prompt, system)
+        return await call_minimax(prompt, system)
     else:
         log.warning("No valid LLM API key configured")
         return '{"nodes":[],"edges":[]}'
@@ -79,8 +80,17 @@ KG_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材�
 3. 只提取片段中明确出现的概念，不要发挥
 4. definition 30~120字，必须基于原文
 5. 单次输出 nodes ≤ 10 条，edges ≤ 12 条
+6. **重要**：definition 和 description 的值中不要包含未转义的引号，不要在值末尾加冒号
 
-【输出格式】严格 JSON（不要 markdown 包裹）：
+【输出格式】严格 JSON（不要 markdown 包裹，不要有语法错误）：
+{
+  "nodes": [
+    {"name": "动作电位", "definition": "细胞受刺激后膜电位的一次快速倒转", "category": "核心概念"}
+  ],
+  "edges": [
+    {"source": "动作电位", "target": "静息电位", "relation_type": "prerequisite", "description": "理解动作电位需先掌握静息电位"}
+  ]
+}
 {
   "nodes": [
     {"name": "动作电位", "definition": "细胞受刺激后膜电位的一次快速倒转", "category": "核心概念"}
@@ -134,6 +144,98 @@ def _node_id(book_title: str, name: str) -> str:
     h = hashlib.md5(f"{book_title}|{name}".encode("utf-8")).hexdigest()[:8]
     safe = book_title.replace(" ", "_").replace("/", "_")
     return f"{safe}::node_{h}"
+
+
+# 并发控制：最大同时 LLM 调用数
+MAX_CONCURRENT_LLM = 5
+_llm_semaphore: asyncio.Semaphore | None = None
+
+def _get_llm_semaphore() -> asyncio.Semaphore:
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        _llm_semaphore = asyncio.Semaphore(MAX_CONCURRENT_LLM)
+    return _llm_semaphore
+
+
+async def _extract_single_chunk(chunk_data: dict, book_title: str) -> tuple[list, list]:
+    """提取单个 chunk 的知识图谱（带并发控制）"""
+    text = chunk_data["text"]
+    source = chunk_data["metadata"].get("source", book_title)
+
+    async with _get_llm_semaphore():
+        kg_data = await extract_knowledge_graph(text, source=source)
+
+    nodes = kg_data.get("nodes", [])
+    edges = kg_data.get("edges", [])
+
+    # 添加 source
+    for node in nodes:
+        node["source"] = book_title
+
+    return nodes, edges
+
+
+async def extract_knowledge_graph_batch(
+    chunks: list[dict],
+    book_title: str,
+    max_concurrency: int = MAX_CONCURRENT_LLM,
+) -> tuple[list, list]:
+    """
+    并行提取多个 chunk 的知识图谱。
+
+    Args:
+        chunks: [{"text": "...", "metadata": {...}}, ...]
+        book_title: 教材标题
+        max_concurrency: 最大并发数
+
+    Returns:
+        (all_nodes, all_edges)
+    """
+    total = len(chunks)
+    log.info("batch_extract_start", total_chunks=total, max_concurrency=max_concurrency)
+
+    # 使用信号量控制并发
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def extract_with_semaphore(chunk_data: dict, idx: int) -> tuple[list, list]:
+        async with semaphore:
+            nodes, edges = await _extract_single_chunk(chunk_data, book_title)
+            if idx % 50 == 0:
+                log.info("batch_progress", processed=idx + 1, total=total)
+            return nodes, edges
+
+    # 创建所有任务
+    tasks = [
+        extract_with_semaphore(chunk, i)
+        for i, chunk in enumerate(chunks)
+    ]
+
+    # 并行执行
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    all_nodes = []
+    all_edges = []
+
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            log.warning("chunk_extract_failed", idx=i, error=str(result))
+            continue
+        nodes, edges = result
+        all_nodes.extend(nodes)
+        all_edges.extend(edges)
+
+    log.info("batch_extract_done", total_nodes=len(all_nodes), total_edges=len(all_edges))
+    return all_nodes, all_edges
+
+
+def _fix_json_fixes(json_str: str) -> str:
+    """修复 LLM 输出中常见的 JSON 语法错误"""
+    # 1. 修复 "key": ": "value" -> "key": "value"  (definition": ": "text" 格式错误)
+    json_str = re.sub(r'(":\s*)":\s*"', r'\1"', json_str)
+    # 2. 修复 "key": "value 而 value 中有未转义引号
+    # 简单处理：移除连续多个引号
+    json_str = re.sub(r'(?<!\\)"{2,}', '"', json_str)
+    return json_str
 
 
 def _is_noise_chunk(chunk_text: str) -> bool:
@@ -195,11 +297,9 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
     book_title = source.split("/")[-1].replace(".pdf", "") if source else "unknown"
 
     # Mock extraction when no API key
-    if not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", ""):
-        log.warning("MINIMAX_API_KEY not set or placeholder, using mock extraction")
-        # 提取连续的关键词（3-8字符的中文词组）
-        import re
-        import hashlib
+    if (not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY in ("", "your_api_key_here")) and \
+       (not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", "")):
+        log.warning("No valid LLM API key configured, using mock extraction")
         # 匹配连续的中文字符
         words = re.findall(r'[一-鿿]{3,8}', chunk_text[:500])
         # 去重并过滤太短的
@@ -244,6 +344,8 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
     try:
         raw_clean = re.sub(r"^```json\s*", "", raw.strip())
         raw_clean = re.sub(r"\s*```$", "", raw_clean.strip())
+        # 修复 LLM 常见的 JSON 错误
+        raw_clean = _fix_json_fixes(raw_clean)
         data = json.loads(raw_clean)
     except Exception as ex:
         log.error("kg_extraction_parse_failed", error=str(ex), raw=raw[:200] if raw else "")
@@ -265,6 +367,7 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
         name_to_id[v["name"]] = node_id
         nodes.append({
             "id": node_id,
+            "name": v["name"],  # KGNode schema expects 'name' field
             "label": v["name"],
             "type": v["category"],
             "description": v["definition"],
@@ -294,14 +397,16 @@ def store_knowledge_graph(kg_data: dict, book_title: str = ""):
 
     node_ids = [n["id"] for n in nodes]
     node_metas = [{"type": "node", "book_title": book_title, "label": n.get("label", n.get("name", "")), "data": json.dumps(n, ensure_ascii=False)} for n in nodes]
+    node_docs = [n.get("label", n.get("name", "")) for n in nodes]
 
     edge_ids = [f"e_{i}" for i in range(len(edges))]
     edge_metas = [{"type": "edge", "book_title": book_title, "data": json.dumps(e, ensure_ascii=False)} for e in edges]
+    edge_docs = [json.dumps(e, ensure_ascii=False) for e in edges]
 
     if node_ids:
-        collection.upsert(ids=node_ids, vectors=[dummy_vector] * len(node_ids), metadatas=node_metas)
+        collection.upsert(ids=node_ids, vectors=[dummy_vector] * len(node_ids), metadatas=node_metas, documents=node_docs)
     if edge_ids:
-        collection.upsert(ids=edge_ids, vectors=[dummy_vector] * len(edge_ids), metadatas=edge_metas)
+        collection.upsert(ids=edge_ids, vectors=[dummy_vector] * len(edge_ids), metadatas=edge_metas, documents=edge_docs)
 
     log.info("kg_stored", node_count=len(nodes), edge_count=len(edges))
 
@@ -310,19 +415,26 @@ def get_full_graph(book_title: str = None) -> dict:
     """获取完整知识图谱"""
     collection = get_or_create_collection(settings.COLLECTION_KG)
 
-    where_filter = {"type": "node"}
-    if book_title:
-        where_filter["book_title"] = book_title
-
-    all_items = collection.get(where=where_filter if book_title else {"type": "node"})
-
     nodes, edges = [], []
-    for meta in all_items.get("metadatas", []):
+
+    # 获取所有 nodes
+    node_filter = {"type": "node"}
+    if book_title:
+        node_filter["book_title"] = book_title
+    node_items = collection.get(where=node_filter)
+    for meta in node_items.get("metadatas", []):
         data_str = meta.get("data", "{}")
         item = json.loads(data_str)
-        if meta.get("type") == "node":
-            nodes.append(item)
-        else:
-            edges.append(item)
+        nodes.append(item)
+
+    # 获取所有 edges
+    edge_filter = {"type": "edge"}
+    if book_title:
+        edge_filter["book_title"] = book_title
+    edge_items = collection.get(where=edge_filter)
+    for meta in edge_items.get("metadatas", []):
+        data_str = meta.get("data", "{}")
+        item = json.loads(data_str)
+        edges.append(item)
 
     return {"nodes": nodes, "edges": edges}

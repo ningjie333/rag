@@ -4,12 +4,13 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 CHROMA_DIR = DATA_DIR / "chroma_db"
 CHROMA_DIR.mkdir(exist_ok=True)
+
+# 加载项目根目录的 .env (scaffold 目录下)
+load_dotenv(BASE_DIR / ".env")
 
 class Settings(BaseSettings):
     # LLM Provider: openai, minimax

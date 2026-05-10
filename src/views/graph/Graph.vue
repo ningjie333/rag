@@ -18,11 +18,11 @@ const showSourceDropdown = ref(false)
 
 const sankeyMockData = {
   nodes: [
-    { id: 's1', name: '兽医诊断学', type: 'source' },
-    { id: 's2', name: '兽医内科学', type: 'source' },
-    { id: 's3', name: '兽医生理学', type: 'source' },
-    { id: 's4', name: '兽医治疗学', type: 'source' },
-    { id: 's5', name: '兽医微生物学', type: 'source' },
+    { id: 's1', name: '诊断学', type: 'source' },
+    { id: 's2', name: '内科学', type: 'source' },
+    { id: 's3', name: '生理学', type: 'source' },
+    { id: 's4', name: '治疗学', type: 'source' },
+    { id: 's5', name: '微生物学', type: 'source' },
     { id: 'c1', name: '心肌炎', type: 'concept' },
     { id: 'c2', name: '心包积液', type: 'concept' },
     { id: 'c3', name: '心力衰竭', type: 'concept' },
@@ -57,8 +57,8 @@ const mockCompression = {
 }
 
 const mockExamples = [
-  { conceptA: '细胞呼吸（兽医生理学）', conceptB: '呼吸作用（兽医内科学）', mergedAs: '细胞呼吸/呼吸作用' },
-  { conceptA: '心肌炎（兽医内科学）', conceptB: '心肌炎症（兽医诊断学）', mergedAs: '心肌炎' },
+  { conceptA: '细胞呼吸（生理学）', conceptB: '呼吸作用（内科学）', mergedAs: '细胞呼吸/呼吸作用' },
+  { conceptA: '心肌炎（内科学）', conceptB: '心肌炎症（诊断学）', mergedAs: '心肌炎' },
   { conceptA: '心音混浊', conceptB: '心音异常', mergedAs: '心音异常' },
   { conceptA: '炎症反应', conceptB: '炎性应答', mergedAs: '炎症反应' },
   { conceptA: 'ST段抬高', conceptB: 'ST段上升', mergedAs: 'ST段抬高' },
@@ -68,14 +68,14 @@ let graph: Graph | null = null
 
 const mockGraphData: GraphData = {
   nodes: [
-    { id: 'n1', label: '心肌炎', type: 'concept', description: '心肌炎症性疾病，可由感染、自身免疫等因素引起', source: '兽医诊断学', frequency: 12 },
-    { id: 'n2', label: '心包积液', type: 'concept', description: '心包腔内液体积聚', source: '兽医诊断学', frequency: 8 },
-    { id: 'n3', label: '心电图异常', type: 'fact', description: 'ST段抬高是典型表现', source: '兽医内科学', frequency: 6 },
-    { id: 'n4', label: '肌钙蛋白', type: 'definition', description: '心肌损伤标志物', source: '兽医诊断学', frequency: 10 },
-    { id: 'n5', label: '心力衰竭', type: 'concept', description: '心脏泵血功能障碍', source: '兽医内科学', frequency: 15 },
-    { id: 'n6', label: '利尿剂治疗', type: 'fact', description: '呋塞米是首选利尿剂', source: '兽医治疗学', frequency: 5 },
-    { id: 'n7', label: '炎症反应', type: 'definition', description: '机体对损伤的防御反应', source: '兽医生理学', frequency: 9 },
-    { id: 'n8', label: '细菌感染', type: 'concept', description: '细菌侵入组织引起感染', source: '兽医微生物学', frequency: 7 },
+    { id: 'n1', label: '心肌炎', type: 'concept', description: '心肌炎症性疾病，可由感染、自身免疫等因素引起', source: '诊断学', frequency: 12 },
+    { id: 'n2', label: '心包积液', type: 'concept', description: '心包腔内液体积聚', source: '诊断学', frequency: 8 },
+    { id: 'n3', label: '心电图异常', type: 'fact', description: 'ST段抬高是典型表现', source: '内科学', frequency: 6 },
+    { id: 'n4', label: '肌钙蛋白', type: 'definition', description: '心肌损伤标志物', source: '诊断学', frequency: 10 },
+    { id: 'n5', label: '心力衰竭', type: 'concept', description: '心脏泵血功能障碍', source: '内科学', frequency: 15 },
+    { id: 'n6', label: '利尿剂治疗', type: 'fact', description: '呋塞米是首选利尿剂', source: '治疗学', frequency: 5 },
+    { id: 'n7', label: '炎症反应', type: 'definition', description: '机体对损伤的防御反应', source: '生理学', frequency: 9 },
+    { id: 'n8', label: '细菌感染', type: 'concept', description: '细菌侵入组织引起感染', source: '微生物学', frequency: 7 },
   ],
   edges: [
     { from_node: 'n1', to_node: 'n2', relation_type: 'associate', weight: 0.8 },
@@ -98,11 +98,11 @@ const typeColorMap: Record<string, string> = {
 }
 
 const sourceColorMap: Record<string, string> = {
-  '兽医诊断学': '#8b5cf6',
-  '兽医内科学': '#ec4899',
-  '兽医生理学': '#f97316',
-  '兽医治疗学': '#06b6d4',
-  '兽医微生物学': '#14b8a6',
+  '诊断学': '#8b5cf6',
+  '内科学': '#ec4899',
+  '生理学': '#f97316',
+  '治疗学': '#06b6d4',
+  '微生物学': '#14b8a6',
 }
 
 function getNodeType(node: KGNode): string {
@@ -178,31 +178,79 @@ function clearFilters() {
   selectedSources.value = []
 }
 
-const flowChartWidth = 300
-const flowChartHeight = 400
+const sankeyNodeHeight = 28
+const sankeyNodeGap = 8
+const sankeyLeftWidth = 120
+const sankeyRightWidth = 120
+const sankeyFlowWidth = 260
 
-const sankeyPaths = computed(() => {
-  const sources = sankeyMockData.nodes.filter(n => n.type === 'source')
-  const targets = sankeyMockData.nodes.filter(n => n.type !== 'source')
-  const srcY: Record<string, number> = {}
-  const tgtY: Record<string, number> = {}
-  const srcSpacing = flowChartHeight / (sources.length + 1)
-  const tgtSpacing = flowChartHeight / (targets.length + 1)
-  sources.forEach((n, i) => { srcY[n.id] = srcSpacing * (i + 1) })
-  targets.forEach((n, i) => { tgtY[n.id] = tgtSpacing * (i + 1) })
-  const maxVal = Math.max(...sankeyMockData.links.map(l => l.value), 1)
-  const paths: string[] = []
-  sankeyMockData.links.forEach(link => {
-    const y1 = srcY[link.source] || 0
-    const y2 = tgtY[link.target] || 0
-    const thickness = Math.max(2, (link.value / maxVal) * 12)
-    const x1 = 0
-    const x2 = flowChartWidth
-    const midX = flowChartWidth / 2
-    const d = `M ${x1} ${y1 - thickness / 2} C ${midX} ${y1 - thickness / 2}, ${midX} ${y2 - thickness / 2}, ${x2} ${y2 - thickness / 2} L ${x2} ${y2 + thickness / 2} C ${midX} ${y2 + thickness / 2}, ${midX} ${y1 + thickness / 2}, ${x1} ${y1 + thickness / 2} Z`
-    paths.push(d)
+const sourceNodes = computed(() => sankeyMockData.nodes.filter(n => n.type === 'source'))
+const targetNodes = computed(() => sankeyMockData.nodes.filter(n => n.type !== 'source'))
+
+const totalSourceHeight = computed(() =>
+  sourceNodes.value.length * sankeyNodeHeight + (sourceNodes.value.length - 1) * sankeyNodeGap
+)
+const totalTargetHeight = computed(() =>
+  targetNodes.value.length * sankeyNodeHeight + (targetNodes.value.length - 1) * sankeyNodeGap
+)
+
+const sankeyChartHeight = computed(() =>
+  Math.max(totalSourceHeight.value, totalTargetHeight.value) + 40
+)
+
+const sankeyNodePositions = computed(() => {
+  const positions: Record<string, { x: number; y: number; width: number; height: number }> = {}
+  const chartH = sankeyChartHeight.value
+  const gap = 10
+
+  const srcTotalH = totalSourceHeight.value
+  const srcStartY = Math.max(0, (chartH - srcTotalH) / 2)
+  sourceNodes.value.forEach((n, i) => {
+    positions[n.id] = {
+      x: gap,
+      y: srcStartY + i * (sankeyNodeHeight + sankeyNodeGap),
+      width: sankeyLeftWidth - gap,
+      height: sankeyNodeHeight,
+    }
   })
-  return paths
+
+  const tgtTotalH = totalTargetHeight.value
+  const tgtStartY = Math.max(0, (chartH - tgtTotalH) / 2)
+  const rightX = gap + sankeyLeftWidth + sankeyFlowWidth
+  targetNodes.value.forEach((n, i) => {
+    positions[n.id] = {
+      x: rightX,
+      y: tgtStartY + i * (sankeyNodeHeight + sankeyNodeGap),
+      width: sankeyRightWidth,
+      height: sankeyNodeHeight,
+    }
+  })
+
+  return positions
+})
+
+const sankeyLinks = computed(() => {
+  const maxVal = Math.max(...sankeyMockData.links.map(l => l.value), 1)
+  const positions = sankeyNodePositions.value
+  return sankeyMockData.links.map(link => {
+    const src = positions[link.source]
+    const tgt = positions[link.target]
+    if (!src || !tgt) return null
+    const thickness = Math.max(3, (link.value / maxVal) * 10)
+    const x1 = src.x + src.width
+    const y1 = src.y + src.height / 2
+    const x2 = tgt.x
+    const y2 = tgt.y + tgt.height / 2
+    const midX = x1 + (x2 - x1) / 2
+    return {
+      d: `M ${x1} ${y1 - thickness / 2} C ${midX} ${y1 - thickness / 2}, ${midX} ${y2 - thickness / 2}, ${x2} ${y2 - thickness / 2} L ${x2} ${y2 + thickness / 2} C ${midX} ${y2 + thickness / 2}, ${midX} ${y1 + thickness / 2}, ${x1} ${y1 + thickness / 2} Z`,
+      thickness,
+      source: link.source,
+      target: link.target,
+      value: link.value,
+      targetNode: sankeyMockData.nodes.find(n => n.id === link.target),
+    }
+  }).filter((l): l is NonNullable<typeof l> => l !== null)
 })
 
 function initGraph() {
@@ -400,7 +448,7 @@ onUnmounted(() => {
           <div v-show="!loading" ref="containerRef" class="graph-container" />
         </template>
 
-        <template v-else>
+        <template v-else-if="activeTab === 'compare'">
           <div class="compare-panel">
             <div class="compare-stat-bar">
               <span class="stat-main">整合前: <strong>{{ mockCompression.before }}</strong> 个节点 &rarr; 整合后: <strong>{{ mockCompression.after_alignment }}</strong> 个节点</span>
@@ -460,29 +508,50 @@ onUnmounted(() => {
         <template v-else-if="activeTab === 'sankey'">
           <div class="sankey-panel">
             <div class="sankey-title">教材 → 知识点 流向图</div>
-            <div class="sankey-chart">
-              <div class="sankey-column sankey-sources">
-                <div class="sankey-col-title">教材来源</div>
-                <div v-for="src in sankeyMockData.nodes.filter(n => n.type === 'source')" :key="src.id" class="sankey-node source-node">
-                  {{ src.name }}
+            <div class="sankey-chart-container">
+              <div class="sankey-header sankey-header-left">教材来源</div>
+              <div class="sankey-header sankey-header-right">知识点</div>
+              <svg class="sankey-svg" :width="sankeyLeftWidth + sankeyFlowWidth + sankeyRightWidth + 20" :height="sankeyChartHeight">
+                <defs>
+                  <linearGradient id="flowGradConcept" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#2563eb" stop-opacity="0.5" />
+                    <stop offset="100%" stop-color="#2563eb" stop-opacity="0.2" />
+                  </linearGradient>
+                  <linearGradient id="flowGradFact" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#16a34a" stop-opacity="0.5" />
+                    <stop offset="100%" stop-color="#16a34a" stop-opacity="0.2" />
+                  </linearGradient>
+                  <linearGradient id="flowGradDef" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#d97706" stop-opacity="0.5" />
+                    <stop offset="100%" stop-color="#d97706" stop-opacity="0.2" />
+                  </linearGradient>
+                </defs>
+                <path
+                  v-for="(link, idx) in sankeyLinks"
+                  :key="idx"
+                  :d="link.d"
+                  :fill="link.targetNode?.type === 'fact' ? 'url(#flowGradFact)' : link.targetNode?.type === 'definition' ? 'url(#flowGradDef)' : 'url(#flowGradConcept)'"
+                  stroke="none"
+                />
+              </svg>
+              <div class="sankey-nodes-layer" style="left:0; width:100%">
+                <div
+                  v-for="src in sourceNodes"
+                  :key="src.id"
+                  class="sankey-node source-node"
+                  :style="{ top: sankeyNodePositions[src.id].y + 'px', left: sankeyNodePositions[src.id].x + 'px', width: sankeyNodePositions[src.id].width + 'px', height: sankeyNodeHeight + 'px' }"
+                >
+                  <span class="node-label">{{ src.name }}</span>
                   <span class="node-count">{{ sankeyMockData.links.filter(l => l.source === src.id).reduce((s, l) => s + l.value, 0) }}</span>
                 </div>
-              </div>
-              <div class="sankey-flows">
-                <svg class="sankey-svg" :viewBox="`0 0 ${flowChartWidth} ${flowChartHeight}`">
-                  <defs>
-                    <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.6" />
-                      <stop offset="100%" stop-color="#16a34a" stop-opacity="0.4" />
-                    </linearGradient>
-                  </defs>
-                  <path v-for="(path, idx) in sankeyPaths" :key="idx" :d="path" fill="url(#flowGrad)" stroke="none" />
-                </svg>
-              </div>
-              <div class="sankey-column sankey-targets">
-                <div class="sankey-col-title">知识点</div>
-                <div v-for="tgt in sankeyMockData.nodes.filter(n => n.type !== 'source')" :key="tgt.id" class="sankey-node" :class="`${tgt.type}-node`">
-                  {{ tgt.name }}
+                <div
+                  v-for="tgt in targetNodes"
+                  :key="tgt.id"
+                  class="sankey-node"
+                  :class="`${tgt.type}-node`"
+                  :style="{ top: sankeyNodePositions[tgt.id].y + 'px', left: sankeyNodePositions[tgt.id].x + 'px', width: sankeyNodePositions[tgt.id].width + 'px', height: sankeyNodeHeight + 'px' }"
+                >
+                  <span class="node-label">{{ tgt.name }}</span>
                   <span class="node-count">{{ sankeyMockData.links.filter(l => l.target === tgt.id).reduce((s, l) => s + l.value, 0) }}</span>
                 </div>
               </div>
@@ -1139,60 +1208,91 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
-.sankey-chart {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  flex: 1;
-  min-height: 350px;
+.sankey-chart-container {
+  position: relative;
+  width: 520px;
+  margin: 0 auto;
 }
 
-.sankey-column {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 120px;
-}
-
-.sankey-col-title {
+.sankey-header {
+  position: absolute;
+  top: -20px;
   font-size: 11px;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-align: center;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--color-border);
+  z-index: 2;
+}
+
+.sankey-header-left {
+  left: 10px;
+  width: 110px;
+}
+
+.sankey-header-right {
+  left: 390px;
+  width: 120px;
+}
+
+.sankey-svg {
+  display: block;
+  overflow: visible;
+}
+
+.sankey-nodes-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
 }
 
 .sankey-node {
+  position: absolute;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
+  padding: 0 10px;
   font-size: 11px;
-  border-radius: var(--radius);
+  border-radius: 6px;
   background: #f1f5f9;
   border: 1px solid var(--color-border);
+  box-sizing: border-box;
+}
+
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .source-node {
   background: #eff6ff;
   border-color: #bfdbfe;
   color: var(--color-primary);
+  font-weight: 600;
 }
 
 .concept-node {
   background: #eff6ff;
   border-color: #bfdbfe;
+  color: #1e40af;
 }
 
 .fact-node {
   background: #f0fdf4;
   border-color: #bbf7d0;
+  color: #166534;
 }
 
 .definition-node {
   background: #fffbeb;
   border-color: #fde68a;
+  color: #92400e;
 }
 
 .node-count {
@@ -1202,24 +1302,17 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.06);
   padding: 1px 5px;
   border-radius: 8px;
-}
-
-.sankey-flows {
-  flex: 1;
-  position: relative;
-  min-width: 200px;
-}
-
-.sankey-svg {
-  width: 100%;
-  height: 100%;
+  flex-shrink: 0;
+  margin-left: 6px;
 }
 
 .sankey-legend {
   display: flex;
   gap: 16px;
-  margin-top: 12px;
+  margin-top: 16px;
   justify-content: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
 }
 
 .legend-item {

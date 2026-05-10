@@ -22,11 +22,11 @@ interface HistoryItem {
 }
 
 const mockHistory: HistoryItem[] = [
-  { title: '兽医诊断学.pdf', chunks: 156, status: 'done', time: '10:30' },
-  { title: '兽医内科学.docx', chunks: 203, status: 'done', time: '10:25' },
-  { title: '兽医生理学.txt', chunks: 89, status: 'done', time: '10:20' },
-  { title: '兽医统计表.xlsx', chunks: 67, status: 'done', time: '10:15' },
-  { title: '兽医笔记.md', chunks: 32, status: 'done', time: '10:10' },
+  { title: '诊断学.pdf', chunks: 156, status: 'done', time: '10:30' },
+  { title: '内科学.docx', chunks: 203, status: 'done', time: '10:25' },
+  { title: '生理学.txt', chunks: 89, status: 'done', time: '10:20' },
+  { title: '医学统计表.xlsx', chunks: 67, status: 'done', time: '10:15' },
+  { title: '医学笔记.md', chunks: 32, status: 'done', time: '10:10' },
 ]
 
 const fileInput = ref<HTMLInputElement | null>(null)
