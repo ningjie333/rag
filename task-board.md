@@ -184,7 +184,7 @@ FE-8 ◄────────────────────────
 
 | 任务ID | 描述 | 提示词文件 | 状态 |
 |--------|------|----------|------|
-| P1-ADV-DOCX | DOCX/Excel 支持 | `docs/docx-excel-agent-prompt.md` | ⏳ |
+| P1-ADV-DOCX | DOCX/Excel 支持 | `docs/docx-excel-agent-prompt.md` | ✅ 完成 @05-10 | file_processor.py 支持 11 种格式 + 编码自动检测 + 错误处理 |
 | P1-ADV-FEEDBACK | 反馈→图谱更新 | `docs/feedback-agent-prompt.md` | ✅ 完成 | POST /api/feedback + Chat.vue 反馈按钮 |
 | P1-ADV-DUAL | 双重对齐+可视化对比 | `docs/dual-alignment-agent-prompt.md` | ✅ 完成 @05-10 | 双重对齐 + Graph.vue 整合对比 Tab |
 
@@ -200,3 +200,56 @@ FE-8 ◄────────────────────────
 ## 📝 笔记
 
 （调控台随时记录关键决策）
+
+---
+
+## 🔍 AI 评审差距分析 — 剩余 40 分任务池
+
+> 来源：AI 评审报告（56.5/100 基础）| 时间：2026-05-10
+> 目标：冲击 85+/100
+
+### 🔴 高优先级（立即做，10-25 分钟 / 项）
+
+| 任务ID | 描述 | 来源分 | 预计得分 | 验收标准 | 状态 |
+|--------|------|--------|---------|----------|------|
+| T-01 | Embedding 模型选型写入文档 | D-RAG设计 | +2 | Agent架构说明.md 有「Embedding 选型」章节，明确写 BAAI/bge-small-zh-v1.5 | ⏳ |
+| T-02 | Graph.vue 节点形状区分 | C-视觉 | +1 | buildG6Data() 对不同 node.type 返回不同 shape（concept→circle/fact→rect/definition→triangle） | ⏳ |
+| T-03 | 整合报告动态数据 | A-整合报告 | +1.5 | report.py 读真实 chunks 统计，删除「mock 数据」标注 | ⏳ |
+| T-04 | 设计决策加量化数据 | D-设计决策 | +1.5 | 「为何多信号」一节加 5 对概念的具体分值例子（炎症/心肌炎等） | ⏳ |
+| T-05 | 删除 report/整合报告.md mock 标注 | A-整合报告 | +0.5 | 文件末尾无「数据来源：mock 示例数据」字样 | ⏳ |
+
+### 🟡 中优先级（25-40 分钟 / 项）
+
+| 任务ID | 描述 | 来源分 | 预计得分 | 验收标准 | 状态 |
+|--------|------|--------|---------|----------|------|
+| T-10 | 多视图切换（整合前后对比） | C-创新元素 | +2 | Graph.vue 有 toggle 按钮切换「图谱视图/整合对比」，并排显示 150→42 节点 | ⏳ |
+| T-11 | 搜索框 + 来源筛选 | C-交互 | +1.5 | Graph toolbar 有 input 搜索 + source 多选下拉，组合过滤节点 | ⏳ |
+| T-12 | 桑基图或时间轴（任选一） | C-创新元素 | +1 | 新增 Sankey 或 Timeline 视图（非 2D 图谱变体） | ⏳ |
+| T-13 | kg_extractor 真实 LLM 调用 | B-知识点提取 | +2 | extract_knowledge_graph() 真实调用 MiniMax API（非 stub），能返回非空 nodes | ⏳ |
+| T-14 | merge_duplicate_concepts 语义对齐 | B-整合算法 | +2.5 | relation_inferrer.py 有「label 编辑距离 <3 → 合并」或 embedding 语义匹配 | ⏳ |
+| T-15 | 单元测试 smoke test | E-代码规范 | +1 | tests/test_smoke.py 用 TestClient 调 /health 和 /api/books | ⏳ |
+
+### 🟢 低优先级（时间允许再做）
+
+| 任务ID | 描述 | 来源分 | 预计得分 | 验收标准 | 状态 |
+|--------|------|--------|---------|----------|------|
+| T-20 | 补全 Embedding 模型选型说明 | D-RAG设计 | +1.5 | 文档明确说 P0 用 ChromaDB 默认 all-MiniLM-L6-v2，P1 用 bge-small-zh-v1.5 | ⏳ |
+| T-21 | docker-compose 启动验证 | E-部署配置 | +1.5 | 验证 docker-compose up --build 能起两个容器，端口映射正确 | ⏳ |
+| T-22 | README 截图整合报告 | F-创新 | +1 | README 有截图显示前端 /report 渲染结果 | ⏳ |
+| T-23 | 类型注解补全 | E-代码规范 | +0.5 | routers/ 下所有函数有完整 type hints | ⏳ |
+| T-24 | Prompt 工程加 few-shot | D-Prompt | +1 | RAG prompt 有完整 few-shot 示例在文档中 | ⏳ |
+
+---
+
+### 📊 分数缺口速查
+
+| 维度 | 现状 | 满分 | 差距 | 关键任务 |
+|------|------|------|------|----------|
+| A 文档 | 11.5 | 15 | 3.5 | T-03, T-05 |
+| B 功能 | 17 | 25 | 8 | T-13, T-14 |
+| C 视觉 | 7 | 13 | 6 | T-02, T-10, T-11, T-12 |
+| D 架构 | 10.5 | 20 | 9.5 | T-01, T-04, T-20 |
+| E 代码 | 6.5 | 17 | 10.5 | T-15, T-21, T-23 |
+| F 创新 | 4 | 10 | 6 | T-10, T-12, T-22 |
+
+**理论最高可加：~35-40 分**（T-01 到 T-15 做完可接近满分）
