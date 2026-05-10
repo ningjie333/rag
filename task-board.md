@@ -242,6 +242,34 @@ FE-8 ◄────────────────────────
 | T-23 | 类型注解补全 | E-代码规范 | +0.5 | routers/ 下所有函数有完整 type hints | ⏳ |
 | T-24 | Prompt 工程加 few-shot | D-Prompt | +1 | RAG prompt 有完整 few-shot 示例在文档中 | ✅ 完成 @13:xx |
 
+### 🛠️ 基建改进任务（代码规范 + 部署配置）
+
+| 任务ID | 描述 | 来源分 | 验收标准 | 状态 |
+|--------|------|--------|----------|------|
+| T-DEPLOY-1 | docker-compose health check | E-部署配置 | `docker-compose ps` 显示 healthy | ⏳ |
+| T-DEPLOY-2 | docker-compose.override.yml | E-部署配置 | 本地开发热重载配置 | ⏳ |
+| T-DEPLOY-3 | 前后端分离启动脚本 | E-部署配置 | `scripts/start_backend.sh` 和 `start_frontend.sh` 可用 | ⏳ |
+
+提示词文件：`docs/deploy-agent-prompt.md`
+
+### 📝 文档量化补充任务（RAG Pipeline）
+
+| 任务ID | 描述 | 验收标准 | 状态 |
+|--------|------|----------|------|
+| T-RAG-1 | 分块策略量化对比 | 系统设计.md 有表格化对比数据 | ⏳ |
+| T-RAG-2 | Embedding 模型量化对比 | Agent架构说明.md 有 NDCG/Recall 数据 | ⏳ |
+| T-RAG-3 | 数据来源脚注 | 引用 C-MTEB/BGE GitHub 链接 | ⏳ |
+
+提示词文件：`docs/rag-quant-agent-prompt.md`
+
+### 📄 整合报告完善任务
+
+| 任务ID | 描述 | 验收标准 | 状态 |
+|--------|------|----------|------|
+| T-REPORT-1 | 补全教学完整性分析 | report/整合报告.md 有第五节「教学完整性分析」 | ⏳ |
+
+提示词文件：`docs/report-completeness-agent-prompt.md`
+
 ---
 
 ### 📊 分数缺口速查
