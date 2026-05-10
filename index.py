@@ -1,13 +1,15 @@
 """
 Vercel Serverless Function - FastAPI entrypoint
+Minimal version for testing Vercel deployment
 """
-import sys
-from pathlib import Path
+from fastapi import FastAPI
 
-# Add scaffold/backend to path
-scaffold_backend = Path(__file__).parent / "scaffold" / "backend"
-sys.path.insert(0, str(scaffold_backend))
+app = FastAPI()
 
-from scaffold.backend.main import app
+@app.get("/")
+def read_root():
+    return {"message": "学科知识整合智能体 API", "status": "ok"}
 
-handler = app
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
