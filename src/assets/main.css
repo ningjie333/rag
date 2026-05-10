@@ -1,0 +1,9 @@
+/* 全局补充样式 - 已在 App.vue 中定义基础样式 */
+
+/* 健康领域专用颜色 */
+:root {
+  --color-health-good: #16a34a;
+  --color-health-warning: #d97706;
+  --color-health-danger: #dc2626;
+  --color-health-info: #0891b2;
+}

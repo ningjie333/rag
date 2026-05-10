@@ -1,0 +1,28 @@
+{
+  "project": "hackathon",
+  "base_dir": ".",
+  "ignore": ["node_modules/**", "dist/**", ".git/**", "backend/node_modules/**", "backend/data/*.db"],
+  "route_check": {
+    "enabled": true,
+    "framework": "vue",
+    "route_file": "src/router/index.ts",
+    "scan_dirs": ["src/views", "src/components"],
+    "scan_ext": [".vue", ".ts"]
+  },
+  "api_check": {
+    "enabled": false,
+    "api_type": "rest",
+    "backend_route_file": "backend/src/routes/index.js",
+    "scan_dirs": ["src/api", "src/views"],
+    "scan_ext": [".ts", ".vue"]
+  },
+  "type_check": { "enabled": false },
+  "empty_check": {
+    "enabled": true,
+    "register_file": "src/router/index.ts",
+    "impl_dirs": ["src/views"],
+    "impl_ext": [".vue"]
+  },
+  "hardcode_check": { "enabled": false },
+  "dead_code_check": { "enabled": false }
+}

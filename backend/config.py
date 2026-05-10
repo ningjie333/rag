@@ -1,0 +1,44 @@
+"""应用配置"""
+import os
+from pathlib import Path
+from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+CHROMA_DIR = DATA_DIR / "chroma_db"
+CHROMA_DIR.mkdir(exist_ok=True)
+
+class Settings(BaseSettings):
+    # API Keys
+    MINIMAX_API_KEY: str = os.getenv("MINIMAX_API_KEY", "")
+    MINIMAX_BASE_URL: str = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
+    MINIMAX_MODEL: str = os.getenv("MINIMAX_MODEL", "MiniMax-Text-01")
+
+    # Server
+    HOST: str = "0.0.0.0"
+    PORT: int = 3002
+
+    # Paths
+    CHROMA_PERSIST_DIR: str = str(CHROMA_DIR)
+
+    # CORS
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:5173",
+    ]
+
+    # Vector store
+    COLLECTION_CHUNKS: str = "textbook_chunks"
+    COLLECTION_KG: str = "knowledge_graph"
+    CHUNK_SIZE: int = 500
+    CHUNK_OVERLAP: int = 50
+    TOP_K: int = 5
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
