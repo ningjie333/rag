@@ -23,8 +23,10 @@ interface HistoryItem {
 
 const mockHistory: HistoryItem[] = [
   { title: '兽医诊断学.pdf', chunks: 156, status: 'done', time: '10:30' },
-  { title: '兽医内科学.pdf', chunks: 203, status: 'done', time: '10:25' },
+  { title: '兽医内科学.docx', chunks: 203, status: 'done', time: '10:25' },
   { title: '兽医生理学.txt', chunks: 89, status: 'done', time: '10:20' },
+  { title: '兽医统计表.csv', chunks: 45, status: 'done', time: '10:15' },
+  { title: '兽医笔记.md', chunks: 32, status: 'done', time: '10:10' },
 ]
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -53,7 +55,7 @@ function handleFileSelect(e: Event) {
 }
 
 function addFiles(files: FileList) {
-  const allowed = ['.pdf', '.txt']
+  const allowed = ['.pdf', '.txt', '.md', '.docx', '.doc', '.xlsx', '.xls', '.csv', '.json', '.yaml', '.yml']
   for (let i = 0; i < files.length; i++) {
     const f = files[i]
     const ext = '.' + f.name.split('.').pop()?.toLowerCase()
@@ -139,7 +141,7 @@ const activeCount = computed(() => fileList.value.filter(f => f.status === 'uplo
 <template>
   <div class="upload page fade-in">
     <h1 class="page-title">教材上传</h1>
-    <p class="page-subtitle">支持 PDF / TXT 格式，可多文件排队上传</p>
+    <p class="page-subtitle">支持 PDF / TXT / MD / DOCX / DOC / XLSX / XLS / CSV / JSON / YAML 格式，可多文件排队上传</p>
 
     <!-- 书名输入 -->
     <div class="title-input-row">
@@ -163,11 +165,11 @@ const activeCount = computed(() => fileList.value.filter(f => f.status === 'uplo
       <div class="drop-zone__text">
         拖拽文件到此处，或 <span class="drop-zone__link">点击选择文件</span>
       </div>
-      <div class="drop-zone__hint">支持 PDF、TXT 格式</div>
+      <div class="drop-zone__hint">支持 PDF / TXT / MD / DOCX / DOC / XLSX / XLS / CSV / JSON / YAML</div>
       <input
         ref="fileInput"
         type="file"
-        accept=".pdf,.txt"
+        accept=".pdf,.txt,.md,.docx,.doc,.xlsx,.xls,.csv,.json,.yaml,.yml"
         multiple
         class="drop-zone__input"
         @change="handleFileSelect"

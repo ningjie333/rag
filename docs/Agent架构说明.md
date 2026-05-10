@@ -163,12 +163,18 @@ Book B 图谱 ──┘                            │
 | 内存存储对话 | 重启丢失 | 换 Redis |
 | 无异步队列 | 图谱构建阻塞 API | 加 Celery/RQ |
 
-### 改进方向（P1/P2）
+### 改进方向（P1/P2/P3）
 
-1. **本地 embedding**：接入 sentence-transformers 中文模型
-2. **异步构建**：图谱构建后台运行，支持进度查询
-3. **混合检索**：向量 + BM25 + Rerank
-4. **多图谱视图**：每个教材独立图谱 + 合并图谱切换
+**P1 必做（2小时）：接入 bge-small-zh-v1.5 中文 embedding**
+- 原因：当前 RAG 无 embedding 模型，只能用 ChromaDB 默认英文模型，中文教材检索质量严重不足
+- 方式：`from sentence_transformers import SentenceTransformer; model = SentenceTransformer('BAAI/bge-small-zh-v1.5')`
+
+**P2 时间允许（4小时）：异步图谱构建 + 进度查询**
+- 原因：当前 /api/graph/build 是同步阻塞，大型教材（1000+ 页）会导致请求超时
+- 方式：Celery + Redis 队列，前端轮询 /api/graph/status
+
+**P3 远期：混合检索 + Rerank**
+- 原因：BM25+RRF 已设计但 embedding 缺失导致效果打折，等 P1 稳定后再叠加
 
 ## 六、Mermaid 架构图
 
@@ -205,6 +211,73 @@ flowchart TD
     GraphBuilder --> D2
     D1 --> Query
 ```
+
+---
+
+## 七、Prompt 设计
+
+### RAG 问答 Prompt（query.py）
+
+**System Prompt：**
+```
+你是一个专业的学科助教。基于检索到的教材内容和知识图谱上下文，准确回答学生问题。
+
+要求：
+1. 只基于提供的引用内容回答，不要编造
+2. 如果引用内容不足以回答，明确说明
+3. 回答要清晰、有条理，适当引用原文（用"【来源：页码】"标注）
+4. 优先使用知识图谱中的关系路径来构建更完整的答案
+
+回答格式：
+[回答内容]
+【来源：页码】
+```
+
+**User Prompt 模板：**
+```
+问题：{question}
+
+参考内容：
+{context}
+
+{graph_section}
+请基于以上内容回答问题。
+```
+
+其中 `graph_section` 注入格式：
+```
+知识图谱关系：
+心肌炎 -[prerequisite]-> 心脏解剖结构
+心肌炎 -[contains]-> 心电图 ST 段抬高
+
+匹配的概念节点：心肌炎, 心脏解剖结构
+```
+
+### Few-Shot 示例（kg_extractor.py）
+
+**输入：**
+「心肌炎是心肌的炎症性疾病，表现为心电图 ST 段抬高和肌钙蛋白升高。」
+
+**输出：**
+```json
+{
+  "concepts": [{
+    "term": "心肌炎",
+    "description": "心肌的炎症性疾病，表现为心电图异常和心肌损伤标志物升高",
+    "aliases": ["心脏炎症"],
+    "relatedTerms": ["心包积液", "心力衰竭"],
+    "potentialPrerequisites": ["心脏解剖结构", "炎症反应机制"],
+    "confidence": 0.95
+  }]
+}
+```
+
+### 防幻觉策略
+
+1. **temperature=0.1**：几乎确定性输出，减少随机编造
+2. **强制引用编号**：每条回答必须标注【来源：页码】
+3. **Few-Shot 示例**：通过示例约束输出格式和内容范围
+4. **拒答机制**：引用不足时明确说明"资料不足以回答"
 
 ---
 

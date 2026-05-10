@@ -3,14 +3,26 @@
 > 生命健康领域 · AI 黑客松项目
 > 核心技术：知识图谱 + RAG 问答 + 多教材整合压缩
 
-## 快速启动
+## 一、Docker 一键启动（推荐）
+
+```bash
+git clone https://github.com/ningjie333/rag.git
+cd rag
+cp .env.example backend/.env
+# 编辑 backend/.env 填入你的 MINIMAX_API_KEY
+docker-compose up -d --build
+# 打开 http://localhost:5173
+```
+
+## 二、本地开发启动
 
 ```bash
 # 0. 环境要求
 #    Python 3.12+, Node.js 18+, uv
 
 # 1. 克隆项目
-cd /mnt/c/Users/ZhuanZ（无密码）/Desktop/hackathon/scaffold
+git clone https://github.com/ningjie333/rag.git
+cd rag
 
 # 2. 安装前端依赖
 npm install
