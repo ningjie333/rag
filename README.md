@@ -139,3 +139,21 @@ scaffold/
 | prerequisite | A 是 B 的前置知识 |
 | contains | A 包含 B |
 | associate | A 与 B 关联 |
+
+---
+
+## 引用与参考
+
+本项目在开发过程中参考了以下开源项目：
+
+| 项目 | 来源 | 参考内容 |
+|------|------|----------|
+| **jecis-repos/laravel-rag** | GitHub | 4阶段检索管道（语义→关键词→RRF→多跳）+ BM25参数（k1=1.5, b=0.75）+ RRF k=60常数 + 多跳图遍历评分衰减机制 |
+| **ChenyuHeee/medical-kg-agent** | GitHub | 7类节点Schema（核心概念/现象/过程/结构/物质/疾病/方法）+ GraphRAG子图注入 + Fixpoint救援机制 |
+| **AntV/G6** | GitHub | 图谱可视化节点类型映射 + 频次→半径颜色设计 |
+| **ChromaDB** | GitHub | 向量检索 + PersistentClient + 集合管理 |
+| **langchain-ai/langchain** | GitHub | RecursiveCharacterTextSplitter 分块策略 |
+
+---
+
+*文档版本：v1.0 | 更新：2026-05-10*
