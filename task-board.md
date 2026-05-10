@@ -184,7 +184,7 @@ FE-8 ◄────────────────────────
 
 | 任务ID | 描述 | 提示词文件 | 状态 |
 |--------|------|----------|------|
-| P1-ADV-DOCX | DOCX/Excel 支持 | `docs/docx-excel-agent-prompt.md` | ✅ 完成 @05-10 | file_processor.py 支持 11 种格式 + 编码自动检测 + 错误处理 |
+| P1-ADV-DOCX | DOCX/Excel 支持 | `docs/docx-excel-agent-prompt.md` | ✅ 完成 @05-10 验收通过 | file_processor.py 支持 11 种格式 + 编码自动检测 + 错误处理 |
 | P1-ADV-FEEDBACK | 反馈→图谱更新 | `docs/feedback-agent-prompt.md` | ✅ 完成 | POST /api/feedback + Chat.vue 反馈按钮 |
 | P1-ADV-DUAL | 双重对齐+可视化对比 | `docs/dual-alignment-agent-prompt.md` | ✅ 完成 @05-10 | 双重对齐 + Graph.vue 整合对比 Tab |
 
@@ -212,11 +212,11 @@ FE-8 ◄────────────────────────
 
 | 任务ID | 描述 | 来源分 | 预计得分 | 验收标准 | 状态 |
 |--------|------|--------|---------|----------|------|
-| T-01 | Embedding 模型选型写入文档 | D-RAG设计 | +2 | Agent架构说明.md 有「Embedding 选型」章节，明确写 BAAI/bge-small-zh-v1.5 | ⏳ |
-| T-02 | Graph.vue 节点形状区分 | C-视觉 | +1 | buildG6Data() 对不同 node.type 返回不同 shape（concept→circle/fact→rect/definition→triangle） | ⏳ |
-| T-03 | 整合报告动态数据 | A-整合报告 | +1.5 | report.py 读真实 chunks 统计，删除「mock 数据」标注 | ⏳ |
-| T-04 | 设计决策加量化数据 | D-设计决策 | +1.5 | 「为何多信号」一节加 5 对概念的具体分值例子（炎症/心肌炎等） | ⏳ |
-| T-05 | 删除 report/整合报告.md mock 标注 | A-整合报告 | +0.5 | 文件末尾无「数据来源：mock 示例数据」字样 | ⏳ |
+| T-01 | Embedding 模型选型写入文档 | D-RAG设计 | +2 | Agent架构说明.md 有「Embedding 选型」章节 | ✅ 完成 @12:30 |
+| T-02 | Graph.vue 节点形状区分 | C-视觉 | +1 | buildG6Data() 对不同 node.type 返回不同 shape（concept→circle/fact→rect/definition→triangle） | ✅ 完成 @12:xx |
+| T-03 | 整合报告动态数据 | A-整合报告 | +1.5 | report.py 读真实 chunks 统计，删除「mock 数据」标注 | ✅ 完成 @05-10 |
+| T-04 | 设计决策加量化数据 | D-设计决策 | +1.5 | 多信号推理一节加 5 对概念量化示例 | ✅ 完成 @12:30 |
+| T-05 | 删除 report/整合报告.md mock 标注 | A-整合报告 | +0.5 | 文件末尾无「数据来源：mock 示例数据」字样 | ✅ 完成 @05-10 |
 
 ### 🟡 中优先级（25-40 分钟 / 项）
 
