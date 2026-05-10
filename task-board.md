@@ -102,6 +102,7 @@ FE-8 ◄────────────────────────
 | `vector_store/kg_extractor.py` | LLM 知识点提取（prompt 增强）| Tutor ConceptExtractionService.cs |
 | `vector_store/relation_inferrer.py` | 关系推理 + 去环 + 去重 | Tutor ConceptCorrelationService.cs |
 | `routers/kg.py` | 图谱查询/构建/合并接口 | 集成上述模块 |
+| `routers/upload.py` | PDF/TXT 上传解析入库 | 接入 pdf_processor + chromadb |
 
 **relation_inferrer.py 核心功能：**
 - `infer_all_relations()` — 多信号关联 + LLM 推理
@@ -109,6 +110,7 @@ FE-8 ◄────────────────────────
 - `merge_duplicate_concepts()` — 同名合并
 
 **API 端点：**
+- `POST /upload` — 上传 PDF/TXT，解析分块存 ChromaDB ✅ (BE-2)
 - `GET /graph` — 获取图谱
 - `POST /graph/build?book_title=xxx` — 构建图谱
 - `POST /graph/merge?target_ratio=0.3` — 跨教材整合
@@ -119,10 +121,27 @@ FE-8 ◄────────────────────────
 
 | 任务 | 状态 | 说明 |
 |------|------|------|
-| BE-2 (upload) | 🔄 Hermes 进行中 | 接入 pdf_processor |
-| ChromaDB 安装 | ❌ 阻塞 | Python 3.14 兼容问题，需改 FAISS |
-| FE-1~FE-8 | ⏳ 待分配 | 前端页面开发 |
-| DOC-1~DOC-5 | ⏳ 待分配 | 文档编写 |
+| BE-2~BE-4 | ✅ Hermes 完成 | 图谱/上传/整合 |
+| BE-5 (RAG 问答) | ⏳ 待开发 | query_engine 需接入 chat 路由 |
+| BE-6 (多轮对话) | ⏳ 待开发 | 需保存对话历史 |
+| BE-7 (整合报告) | ⏳ 待开发 | 需实现报告生成 |
+| FE-1~FE-8 | ⏳ **待分配** | 前端 Agent — 见 `docs/frontend-agent-prompt.md` |
+| DOC-1~DOC-5 | ⏳ 待分配 | 文档 Agent |
+
+---
+
+## 🎨 前端 Agent 任务分配
+
+### 前端 Agent 提示词
+- 位置：`docs/frontend-agent-prompt.md`
+- 开发顺序：FE-1 → FE-3(mock) → FE-4 → FE-5(mock) → FE-6(mock) → FE-2 → FE-7 → FE-8
+- 技术栈：Vue 3 + TypeScript + AntV G6 + marked
+
+### 状态更新格式
+每完成一个任务，在「当前阻塞 & 进行中」区域更新：
+```markdown
+| FE-X | ✅ 完成 @HH:MM | 描述 |
+```
 
 ---
 
