@@ -1,0 +1,6 @@
+[project]
+name = "hackathon-scaffold"
+version = "0.1.0"
+
+[tool.vercel]
+entrypoint = "api/app.py"
