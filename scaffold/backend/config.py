@@ -5,12 +5,14 @@ from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-CHROMA_DIR = DATA_DIR / "chroma_db"
-CHROMA_DIR.mkdir(exist_ok=True)
 
 # 加载项目根目录的 .env (scaffold 目录下)
 load_dotenv(BASE_DIR / ".env")
+
+# 数据目录（优先用环境变量，支持 Docker / Railway / 本地）
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))
+CHROMA_DIR = Path(os.environ.get("CHROMA_PERSIST_DIR", str(DATA_DIR / "chroma_db")))
+CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 class Settings(BaseSettings):
     # LLM Provider: openai, minimax
@@ -33,11 +35,12 @@ class Settings(BaseSettings):
     # Paths
     CHROMA_PERSIST_DIR: str = str(CHROMA_DIR)
 
-    # CORS
+    # CORS - 支持 Vercel 前端
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
         "http://localhost:4173",
         "http://127.0.0.1:5173",
+        "https://rag-smoky.vercel.app",
     ]
 
     # Vector store
@@ -48,7 +51,7 @@ class Settings(BaseSettings):
     TOP_K: int = 5
 
     # Data directories
-    DATA_DIR: str = str(BASE_DIR / "data")
+    DATA_DIR: str = str(DATA_DIR)
 
     class Config:
         env_file = ".env"
