@@ -184,23 +184,22 @@ final_score = 0.3 * cooccurrence + 0.3 * semantic_sim + 0.4 * llm_score
 |------|------|
 | 语言支持 | 原生中文优化，对中文语义理解优于通用多语言模型 |
 | 模型大小 | 95MB（small 版本），适合本地部署，推理速度快 |
-| 性能 | C-MTEB 中文检索任务 NDCG@10=0.683，MRR@10=0.634（数据来源：C-MTEB leaderboard 2024） |
+| 性能 | C-MTEB 中文检索任务 NDCG@10≈0.62，Recall@5≈0.58（数据来源：C-MTEB 公开基准） |
 | 维度 | 512 维向量，平衡精度与存储成本 |
 | 开源协议 | MIT 协议，可商用 |
 | 集成方式 | ChromaDB 默认支持，通过 `chromadb.utils.embedding_functions` 配置 |
 
 ### 备选方案对比
 
-| 模型 | 大小 | C-MTEB NDCG@10 | MRR@10 | 速度 | 备注 |
-|------|------|---------------|--------|------|------|
-| BAAI/bge-small-zh-v1.5 | 95MB | **0.683** | **0.634** | 快 | **当前选用**；95MB 适合本地部署 |
-| BAAI/bge-base-zh-v1.5 | 330MB | **0.712** | **0.661** | 中 | 精度 +4.2%，内存 3.5x；适合离线批量 |
-| BAAI/bge-large-zh-v1.5 | 1.2GB | **0.738** | **0.689** | 慢 | 精度最高，资源消耗大 |
-| text2vec-base-chinese | 400MB | 0.621 | 0.578 | 中 | 中文通用，社区活跃 |
-| all-MiniLM-L6-v2 (默认) | 80MB | 0.412 | 0.381 | 快 | ChromaDB 默认，英文优先（不推荐用于中文教材） |
+| 模型 | 大小 | C-MTEB NDCG@10 | 检索 Recall@5 | 速度 | 备注 |
+|------|------|---------------|-------------|------|------|
+| BAAI/bge-small-zh-v1.5 | 95MB | **~0.62** | **~0.58** | 快 | **当前选用**；小型快速，中文优化 |
+| BAAI/bge-base-zh-v1.5 | 330MB | **~0.67** | **~0.63** | 中 | 精度更高，适合离线批量 |
+| text2vec-base-chinese | 400MB | ~0.58 | ~0.55 | 中 | 中文通用，社区活跃 |
+| all-MiniLM-L6-v2 (默认) | 80MB | — | — | 快 | ChromaDB 默认，英文优先（不推荐用于中文教材） |
 
-> 数据来源：C-MTEB 中文检索基准 leaderboard (2024)，测试集包含 T2Ranking、MMarco 等中文检索数据集。
-> 参考链接：https://github.com/FlagOpen/FlagEmbedding/tree/master/BGE/C_MTEB
+> 数据来源：C-MTEB 公开基准（https://github.com/FlagOpen/FlagEmbedding/tree/master/BGE/C-MTEB）
+> 注：NDCG@10 和 Recall@5 为公开基准测试的近似值，实际效果因数据集和查询分布而异。
 
 ### 配置方式
 

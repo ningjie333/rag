@@ -406,11 +406,6 @@ onUnmounted(() => {
       <div class="graph-toolbar">
         <span class="graph-title">知识图谱</span>
         <div class="toolbar-info">
-          <div class="tab-switcher">
-            <button class="tab-btn" :class="{ active: activeTab === 'graph' }" @click="activeTab = 'graph'">🕸️ 图谱</button>
-            <button class="tab-btn" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">📊 对比</button>
-            <button class="tab-btn" :class="{ active: activeTab === 'sankey' }" @click="activeTab = 'sankey'">📈 流向</button>
-          </div>
           <template v-if="activeTab === 'graph'">
             <div class="search-box">
               <input
@@ -443,6 +438,14 @@ onUnmounted(() => {
       </div>
 
       <div class="graph-main">
+        <div class="graph-tab-bar">
+          <div class="tab-switcher">
+            <button class="tab-btn" :class="{ active: activeTab === 'graph' }" @click="activeTab = 'graph'">🕸️ 图谱</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">📊 对比</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'sankey' }" @click="activeTab = 'sankey'">📈 流向</button>
+          </div>
+        </div>
+        <div class="graph-tab-content">
         <template v-if="activeTab === 'graph'">
           <LoadingSpinner v-if="loading" text="加载图谱中..." />
           <div v-show="!loading" ref="containerRef" class="graph-container" />
@@ -594,6 +597,7 @@ onUnmounted(() => {
           </div>
         </div>
       </template>
+        </div>
     </div>
 
     <div v-if="graphData" class="graph-footer">
@@ -646,6 +650,21 @@ onUnmounted(() => {
 
 .graph-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.graph-tab-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 16px 0;
+  flex-shrink: 0;
+}
+
+.graph-tab-content {
+  flex: 1;
   position: relative;
   overflow: hidden;
 }
@@ -653,7 +672,9 @@ onUnmounted(() => {
 .graph-container {
   width: 100%;
   height: 100%;
-  background: #fafbfc;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .btn {
@@ -833,8 +854,38 @@ onUnmounted(() => {
   display: flex;
   gap: 2px;
   background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.tab-btn {
+  border: none;
+  background: transparent;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
   border-radius: 6px;
-  padding: 2px;
+  color: var(--color-text-secondary);
+  transition: all var(--transition);
+  position: relative;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--color-text);
+  background: rgba(0,0,0,0.03);
+}
+
+.tab-btn.active {
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.3);
+}
+
+.tab-btn.active::after {
+  display: none;
 }
 
 .tab-btn {
@@ -876,7 +927,6 @@ onUnmounted(() => {
   padding: 24px;
   height: 100%;
   overflow-y: auto;
-  background: #fafbfc;
 }
 
 .compare-stat-bar {
@@ -1195,10 +1245,10 @@ onUnmounted(() => {
 
 /* ===== 桑基图 ===== */
 .sankey-panel {
-  flex: 1;
   display: flex;
   flex-direction: column;
   padding: 20px;
+  height: 100%;
   overflow-y: auto;
 }
 

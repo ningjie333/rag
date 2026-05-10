@@ -293,4 +293,34 @@ FE-8 ◄────────────────────────
 | T-DEPLOY-2 | docker-compose.override.yml（开发环境） | ✅ 完成 @05-10 | docker-compose.override.yml |
 | T-DEPLOY-3 | 前后端分离启动脚本 | ✅ 完成 @05-10 | scripts/start_backend.sh + scripts/start_frontend.sh |
 
+---
+
+## 🔬 RAG 量化对比任务（T-RAG）
+
+| 任务ID | 描述 | 状态 | 产出文件 |
+|--------|------|------|----------|
+| T-RAG-1 | 分块策略量化对比（系统设计.md 加表格） | ✅ 完成 @05-10 | docs/系统设计.md（§零、RAG 分块策略量化对比） |
+| T-RAG-2 | Embedding 模型量化对比（Agent架构说明.md 加 NDCG 数据） | ✅ 完成 @05-10 | docs/Agent架构说明.md（§Embedding 模型选型 升级） |
+| T-RAG-3 | 数据来源脚注（引用 C-MTEB/BGE GitHub） | ✅ 完成 @05-10 | docs/系统设计.md + docs/Agent架构说明.md（参考文献节） |
+
+---
+
+## 📋 报告完整性任务（T-REPORT）
+
+| 任务ID | 描述 | 状态 | 产出文件 |
+|--------|------|------|----------|
+| T-REPORT-1 | 教学完整性分析（整合报告 §五） | ✅ 完成 @05-10 | report/整合报告.md（§五、教学完整性分析） |
+
 **理论最高可加：~35-40 分**（T-01 到 T-15 做完可接近满分）
+
+---
+
+## 📊 RAG Benchmark 任务（T-BENCH）
+
+| 任务ID | 描述 | 状态 | 产出文件 |
+|--------|------|------|----------|
+| T-BENCH-1 | benchmark 数据（rag_benchmark.json，5 题 + baseline） | ⏳ | backend/benchmark/rag_benchmark.json |
+| T-BENCH-2 | api-contract.md 引用 benchmark | ⏳ | docs/api-contract.md（技术备注节） |
+| T-BENCH-3 | Agent架构说明.md 引用 benchmark 结果 | ⏳ | docs/Agent架构说明.md（RAG Pipeline 节） |
+
+提示词文件：`docs/benchmark-agent-prompt.md`

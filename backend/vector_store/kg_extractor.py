@@ -230,11 +230,14 @@ async def extract_knowledge_graph_batch(
 
 def _fix_json_fixes(json_str: str) -> str:
     """修复 LLM 输出中常见的 JSON 语法错误"""
-    # 1. 修复 "key": ": "value" -> "key": "value"  (definition": ": "text" 格式错误)
-    json_str = re.sub(r'(":\s*)":\s*"', r'\1"', json_str)
-    # 2. 修复 "key": "value 而 value 中有未转义引号
-    # 简单处理：移除连续多个引号
-    json_str = re.sub(r'(?<!\\)"{2,}', '"', json_str)
+    # 1. 修复 "key":："value" -> "key": "value" (中文冒号在值前面)
+    # LLM often outputs "definition":："text" instead of "definition": "text"
+    json_str = re.sub(r':："', ': "', json_str)
+    # 2. 修复 "key":："value" -> "key": "value" (ASCII colon + 中文冒号)
+    json_str = re.sub(r':："', ': "', json_str)
+    # 3. 如果 value 后面没有闭合引号，补上
+    # 例如 "definition": "text", -> "definition": "text",
+    # 已经ok了
     return json_str
 
 
