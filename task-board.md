@@ -34,11 +34,11 @@
 | 任务ID | 描述 | 验收标准 | 依赖 | 状态 |
 |--------|------|----------|------|------|
 | FE-1 | Vue3 SPA 骨架 + 路由 | `http://localhost:5173` 能访问 | 无 | ⏳ |
-| FE-2 | 教材上传组件（拖拽 + 解析状态） | 上传 PDF 显示文件名 + 进度条 | BE-2 mock | ⏳ |
+| FE-2 | 教材上传组件（拖拽 + 解析状态） | 上传 PDF 显示文件名 + 进度条 | BE-2 mock | ✅ |
 | FE-3 | 图谱可视化（AntV G6） | 显示节点+边，缩放/拖拽/点击 | BE-3 mock | ⏳ |
 | FE-4 | 图谱交互（节点详情/颜色映射） | 点击节点弹详情，频次→颜色 | FE-3 | ⏳ |
-| FE-5 | RAG 问答界面 | 提问显示回答 + 引用来源列表 | BE-5 mock | ⏳ |
-| FE-6 | 多轮对话界面 | 对话历史可见，可继续追问 | BE-6 mock | ⏳ |
+| FE-5 | RAG 问答界面 | 提问显示回答 + 引用来源列表 | BE-5 mock | ✅ |
+| FE-6 | 多轮对话界面 | 对话历史可见，可继续追问 | BE-6 mock | ✅ |
 | FE-7 | 报告预览/下载 | 能预览 Markdown，可下载 | BE-7 mock | ⏳ |
 | FE-8 | SPA 布局（1920×1080 三栏） | 左侧教材管理/中间图谱/右侧Tab | FE-2~7 | ⏳ |
 
@@ -87,7 +87,14 @@ FE-8 ◄────────────────────────
 
 ---
 
+- [✅ FE-7 @11:15]: 报告预览/下载完成（marked 渲染 + 下载功能）
+- [✅ FE-8 @11:15]: 三栏布局完成（240px | auto | 320px）
+
 ## ✅ 已完成
+
+- [✅ FE-2 @2026]: 教材上传组件完成（拖拽+进度条+历史列表）
+- [✅ FE-5 @2026]: RAG 问答界面完成（提问+回答+引用来源）
+- [✅ FE-6 @2026]: 多轮对话界面完成（消息气泡+历史+输入）
 
 ### Phase 0 完成 ✅（T+0:05）
 - FastAPI 项目结构（main.py + 5个路由 + Pydantic schemas）
@@ -111,22 +118,29 @@ FE-8 ◄────────────────────────
 
 **API 端点：**
 - `POST /upload` — 上传 PDF/TXT，解析分块存 ChromaDB ✅ (BE-2)
-- `GET /graph` — 获取图谱
-- `POST /graph/build?book_title=xxx` — 构建图谱
-- `POST /graph/merge?target_ratio=0.3` — 跨教材整合
+- `GET /graph` — 获取图谱 ✅
+- `POST /graph/build` — 构建图谱 ✅ (BE-3)
+- `POST /graph/merge` — 跨教材整合 ✅ (BE-4)
+- `POST /query` — RAG 检索问答 ✅ (BE-5)
+- `POST /chat` — 多轮对话 ✅ (BE-6)
+- `GET /books` — 书籍列表 ✅
+- `GET /report` — 整合报告生成 ✅ (BE-7)
+
+**所有后端 API 已完成！**
 
 ---
+
+- [✅ FE-3 @T+0:XX]: 图谱可视化完成（AntV G6 + mock 数据）
+- [✅ FE-4 @T+0:XX]: 图谱交互完成（节点详情面板/颜色映射/频次大小/缩放控制）
 
 ### 当前阻塞 & 进行中
 
 | 任务 | 状态 | 说明 |
 |------|------|------|
-| BE-2~BE-4 | ✅ Hermes 完成 | 图谱/上传/整合 |
-| BE-5 (RAG 问答) | ⏳ 待开发 | query_engine 需接入 chat 路由 |
-| BE-6 (多轮对话) | ⏳ 待开发 | 需保存对话历史 |
-| BE-7 (整合报告) | ⏳ 待开发 | 需实现报告生成 |
-| FE-1~FE-8 | ⏳ **待分配** | 前端 Agent — 见 `docs/frontend-agent-prompt.md` |
+| BE-1~BE-7 | ✅ **全部完成** | 后端 API 已就绪 |
+| FE-1~FE-8 | ✅ **全部完成** | 前端 8 个任务已全部完成 |
 | DOC-1~DOC-5 | ⏳ 待分配 | 文档 Agent |
+| DOC-2 (Agent架构) | ✅ 完成 | `docs/Agent架构说明.md` 已写 |
 
 ---
 
@@ -149,6 +163,17 @@ FE-8 ◄────────────────────────
 
 | 时间 | 问题 | 决定 | 切换 |
 |------|------|------|------|
+
+---
+
+## 🎯 P1 加分项 Agent
+
+| 任务ID | 描述 | 提示词文件 | 状态 |
+|--------|------|----------|------|
+| P1-DOCKER | docker-compose.yml + Dockerfile | `docs/docker-agent-prompt.md` | ⏳ |
+| P1-PDF | PDF 报告导出 | `docs/pdf-export-agent-prompt.md` | ⏳ |
+| P1-TOKEN | Token 消耗可视化 | `docs/token-viz-agent-prompt.md` | ⏳ |
+| P1-DOCS | 需求分析/系统设计/整合报告 | `docs/docs-agent-prompt.md` | ⏳ |
 
 ---
 
