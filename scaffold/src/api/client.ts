@@ -9,7 +9,7 @@
  * 环境变量 VITE_API_URL 设置后端地址，默认 http://localhost:3000/api
  */
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3002/api'
+const BASE = import.meta.env.VITE_API_URL || 'https://back-rag-production.up.railway.app/api'
 
 export class ApiError extends Error {
   status: number
