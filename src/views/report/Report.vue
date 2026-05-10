@@ -80,6 +80,23 @@ function downloadReport() {
   URL.revokeObjectURL(url)
 }
 
+async function exportPDF() {
+  loadingPDF.value = true
+  try {
+    const element = document.getElementById('report-content')
+    const opt = {
+      margin: [10, 10, 10, 10] as [number, number, number, number],
+      filename: 'knowledge-report.pdf',
+      image: { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+    }
+    await html2pdf().set(opt).from(element as HTMLElement).save()
+  } finally {
+    loadingPDF.value = false
+  }
+}
+
 onMounted(() => {
   fetchReport()
 })
@@ -89,6 +106,9 @@ onMounted(() => {
   <div class="report-view">
     <div class="report-toolbar">
       <div class="toolbar-left">
+        <button class="btn btn-outline btn-sm" @click="exportPDF" :disabled="!reportContent || loadingPDF">
+          📄 导出 PDF
+        </button>
         <button class="btn btn-outline btn-sm" @click="downloadReport" :disabled="!reportContent">
           ⬇️ 下载 .md
         </button>
@@ -107,7 +127,7 @@ onMounted(() => {
       <LoadingSpinner v-if="loading" text="加载报告中..." />
       <EmptyState v-else-if="!reportContent" icon="📄" text="暂无报告数据" actionLabel="生成报告" />
 
-      <div v-else class="report-content" v-html="htmlContent" />
+      <div v-else id="report-content" class="report-content" v-html="htmlContent" />
     </div>
   </div>
 </template>

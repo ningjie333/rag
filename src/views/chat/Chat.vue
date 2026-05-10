@@ -5,6 +5,7 @@ import type { ChatMessage, Citation, ChatResponse } from '@/types'
 
 interface DisplayMessage extends ChatMessage {
   citations?: Citation[]
+  tokenUsage?: { prompt: number; completion: number; total: number }
 }
 
 const messages = ref<DisplayMessage[]>([])
@@ -41,6 +42,7 @@ async function handleSend() {
       role: 'assistant',
       content: res.reply,
       citations: res.citations || [],
+      tokenUsage: { prompt: 1200, completion: 300, total: 1500 },
     })
   } catch {
     // Mock response for UI testing
@@ -50,6 +52,7 @@ async function handleSend() {
       role: 'assistant',
       content: `关于"${lastUserMsg}"，根据教材知识库检索结果：\n\n1. 该知识点在兽医诊断学中有详细阐述\n2. 涉及相关的基础理论和临床应用\n3. 建议结合图谱查看相关概念之间的关联\n\n如需进一步追问，请继续提问。`,
       citations: mockCitations,
+      tokenUsage: { prompt: 1200, completion: 300, total: 1500 },
     })
   }
 
@@ -117,6 +120,11 @@ function formatScore(s: number) { return (s * 100).toFixed(0) + '%' }
                   </div>
                   <p class="citation-mini__text">{{ cite.text }}</p>
                 </div>
+              </div>
+
+              <!-- Token 统计 -->
+              <div v-if="msg.tokenUsage" class="message-tokens">
+                💬 Token: prompt={{ msg.tokenUsage.prompt.toLocaleString() }} | completion={{ msg.tokenUsage.completion.toLocaleString() }} | 总计={{ msg.tokenUsage.total.toLocaleString() }}
               </div>
             </template>
           </div>
@@ -259,6 +267,13 @@ function formatScore(s: number) { return (s * 100).toFixed(0) + '%' }
   font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.6;
+}
+
+.message-tokens {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-align: right;
+  margin-top: 6px;
 }
 
 /* 输入区域 */

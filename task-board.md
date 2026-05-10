@@ -141,6 +141,9 @@ FE-8 ◄────────────────────────
 | FE-1~FE-8 | ✅ **全部完成** | 前端 8 个任务已全部完成 |
 | DOC-1~DOC-5 | ⏳ 待分配 | 文档 Agent |
 | DOC-2 (Agent架构) | ✅ 完成 | `docs/Agent架构说明.md` 已写 |
+| DOC-3 (需求分析) | ✅ 完成 @11:30 | `docs/需求分析.md` 已写 |
+| DOC-4 (系统设计) | ✅ 完成 @11:30 | `docs/系统设计.md` 已写 |
+| DOC-5 (整合报告) | ✅ 完成 @11:30 | `report/整合报告.md` 已写 |
 
 ---
 
@@ -171,9 +174,9 @@ FE-8 ◄────────────────────────
 | 任务ID | 描述 | 提示词文件 | 状态 |
 |--------|------|----------|------|
 | P1-DOCKER | docker-compose.yml + Dockerfile | `docs/docker-agent-prompt.md` | ✅ 完成 @05-10 | docker-compose.yml + Dockerfile.backend + Dockerfile.frontend + nginx.conf |
-| P1-PDF | PDF 报告导出 | `docs/pdf-export-agent-prompt.md` | ⏳ |
-| P1-TOKEN | Token 消耗可视化 | `docs/token-viz-agent-prompt.md` | ⏳ |
-| P1-DOCS | 需求分析/系统设计/整合报告 | `docs/docs-agent-prompt.md` | ⏳ |
+| P1-PDF | PDF 报告导出 | `docs/pdf-export-agent-prompt.md` | ✅ 完成 @12:xx | Report.vue 添加 html2pdf.js 导出功能 |
+| P1-TOKEN | Token 消耗可视化 | `docs/token-viz-agent-prompt.md` | ✅ 完成 @12:xx | QA.vue + Chat.vue 添加 token 消耗显示 |
+| P1-DOCS | ✅ 完成 @11:30 | 需求分析/系统设计/整合报告 3 个文档已完成 |
 
 ---
 

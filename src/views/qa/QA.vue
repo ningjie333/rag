@@ -8,6 +8,7 @@ const loading = ref(false)
 const answered = ref(false)
 const answerText = ref('')
 const citations = ref<Citation[]>([])
+const tokenUsage = ref<{ prompt: number; completion: number; total: number } | null>(null)
 
 const mockAnswer: QueryResponse = {
   answer: '心肌炎的诊断主要依据：1) 临床症状（心音混浊、心率加快）2) 心电图检查（ST段抬高、T波倒置）3) 血液检查（肌钙蛋白升高）4) 超声心动图（心室壁运动异常）。治疗方案包括：休息、抗炎治疗、对症支持治疗。',
@@ -38,6 +39,8 @@ async function handleSubmit() {
     answerText.value = mockAnswer.answer
     citations.value = mockAnswer.citations
   }
+
+  tokenUsage.value = { prompt: 1200, completion: 300, total: 1500 }
 
   loading.value = false
   answered.value = true
@@ -94,6 +97,9 @@ function formatScore(s: number) { return (s * 100).toFixed(0) + '%' }
           <span class="answer-card__label">AI 回答</span>
         </div>
         <div class="answer-card__content">{{ answerText }}</div>
+        <div v-if="tokenUsage" class="answer-card__tokens">
+          💬 Token: prompt={{ tokenUsage.prompt.toLocaleString() }} | completion={{ tokenUsage.completion.toLocaleString() }} | 总计={{ tokenUsage.total.toLocaleString() }}
+        </div>
       </div>
 
       <!-- 引用来源 -->
@@ -173,6 +179,12 @@ function formatScore(s: number) { return (s * 100).toFixed(0) + '%' }
   line-height: 1.8;
   color: var(--color-text);
   white-space: pre-wrap;
+}
+.answer-card__tokens {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  text-align: right;
+  margin-top: 8px;
 }
 
 .section-title {
