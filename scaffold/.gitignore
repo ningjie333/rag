@@ -49,3 +49,5 @@ build_out.txt
 # Large files (no PDFs in repo)
 *.pdf
 *.PDF
+
+.vercel
