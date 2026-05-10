@@ -1,12 +1,15 @@
 """
 Vercel Serverless Function - FastAPI entrypoint
+Imports the actual backend FastAPI app
 """
-from fastapi import FastAPI
+import sys
+from pathlib import Path
 
-app = FastAPI()
+# Add backend to path
+backend_path = Path(__file__).parent / "backend"
+sys.path.insert(0, str(backend_path))
 
-@app.get("/")
-def read_root():
-    return {"message": "学科知识整合智能体 API"}
+from main import app
 
+# Vercel handler
 handler = app
