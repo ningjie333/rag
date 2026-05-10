@@ -170,7 +170,7 @@ FE-8 ◄────────────────────────
 
 | 任务ID | 描述 | 提示词文件 | 状态 |
 |--------|------|----------|------|
-| P1-DOCKER | docker-compose.yml + Dockerfile | `docs/docker-agent-prompt.md` | ⏳ |
+| P1-DOCKER | docker-compose.yml + Dockerfile | `docs/docker-agent-prompt.md` | ✅ 完成 @05-10 | docker-compose.yml + Dockerfile.backend + Dockerfile.frontend + nginx.conf |
 | P1-PDF | PDF 报告导出 | `docs/pdf-export-agent-prompt.md` | ⏳ |
 | P1-TOKEN | Token 消耗可视化 | `docs/token-viz-agent-prompt.md` | ⏳ |
 | P1-DOCS | 需求分析/系统设计/整合报告 | `docs/docs-agent-prompt.md` | ⏳ |

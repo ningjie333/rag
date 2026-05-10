@@ -2,11 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { marked } from 'marked'
 import { get } from '@/api/client'
+import html2pdf from 'html2pdf.js'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 const reportContent = ref('')
 const loading = ref(true)
+const loadingPDF = ref(false)
 const bookCount = ref(0)
 const knowledgePointCount = ref(0)
 const generatedAt = ref('')
