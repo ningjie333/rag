@@ -18,7 +18,7 @@ http://localhost:3002/api
 
 | ID | 方法 | 路径 | 描述 | Request | Response |
 |----|------|------|------|---------|----------|
-| A1 | POST | /api/upload | 上传多格式文件 | form-data: file, book_title。支持 PDF/TXT/MD/DOCX/DOC/CSV/JSON/YAML | `{ success, chunks, message, book_title }` |
+| A1 | POST | /api/upload | 上传多格式文件 | form-data: file, book_title。支持 PDF/TXT/MD/DOCX/DOC/XLSX/XLS/CSV/JSON/YAML | `{ success, chunks, message, book_title }` |
 | A2 | POST | /api/query | RAG 检索问答 | JSON: `{ question, top_k }` | `{ answer, citations[], graph_context }` |
 | A3 | GET | /api/graph | 获取知识图谱 | query: book_title (可选) | `{ nodes[], edges[], total_nodes, total_edges }` |
 | A4 | POST | /api/graph/build | 触发图谱构建 | — | `{ success, message }` |

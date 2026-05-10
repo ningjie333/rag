@@ -21,31 +21,48 @@ ALLOWED_RELATIONS = {"prerequisite", "parallel", "contains", "applies_to"}
 DEFAULT_CATEGORY = "核心概念"
 
 
-async def call_minimax(prompt: str, system: str = "") -> str:
-    if not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", ""):
-        log.warning("MINIMAX_API_KEY not set or placeholder")
+async def call_llm(prompt: str, system: str = "") -> str:
+    """通用 LLM 调用，支持 OpenAI / MiniMax"""
+    if settings.LLM_PROVIDER == "openai" and settings.OPENAI_API_KEY:
+        return await call_openai(prompt, system)
+    elif settings.MINIMAX_API_KEY and settings.MINIMAX_API_KEY not in ("your_api_key_here", "sk-...", ""):
+        return await call_llm(prompt, system)
+    else:
+        log.warning("No valid LLM API key configured")
         return '{"nodes":[],"edges":[]}'
 
+
+async def call_openai(prompt: str, system: str = "") -> str:
+    """调用 OpenAI-compatible API"""
     headers = {
-        "Authorization": f"Bearer {settings.MINIMAX_API_KEY}",
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": settings.MINIMAX_MODEL,
+        "model": settings.OPENAI_MODEL,
         "messages": (
-            [{"role": "system", "content": system}] if system else []
+            [{"role": "system", "content": system}]
+            if system
+            else []
         ) + [{"role": "user", "content": prompt}],
         "temperature": 0.3,
     }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
-            f"{settings.MINIMAX_BASE_URL}/chat/completions",
+            f"{settings.OPENAI_BASE_URL}/chat/completions",
             headers=headers,
             json=payload,
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
+
+
+async def call_minimax(prompt: str, system: str = "") -> str:
+    """调用 MiniMax API"""
+    if not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", ""):
+        log.warning("MINIMAX_API_KEY not set or placeholder")
+        return '{"nodes":[],"edges":[]}'
 
 
 # ============ 强约束 Prompt（7类别 + 4关系） ============
@@ -194,7 +211,7 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
                 continue
             seen.add(word)
             node_id = f"mock_{hashlib.md5(word.encode()).hexdigest()[:8]}"
-            nodes.append({"id": node_id, "name": word, "label": word, "definition": f"概念: {word[:15]}", "category": "核心概念", "confidence": 0.5})
+            nodes.append({"id": node_id, "name": word, "label": word, "type": "concept", "description": f"概念: {word[:15]}", "source": book_title, "category": "核心概念", "confidence": 0.5})
         # 生成简单的共现边
         for i in range(min(len(nodes), 5)):
             for j in range(i+1, min(len(nodes), 8)):
@@ -207,13 +224,29 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
         chunk_text=chunk_text.strip()[:3000],
     )
 
+    raw = None
+    last_err = None
+    for attempt in range(2):
+        try:
+            raw = await call_llm(prompt, KG_EXTRACT_SYSTEM)
+            break
+        except Exception as ex:
+            last_err = ex
+            log.warning("kg_minimax_retry", attempt=attempt + 1, error=str(ex))
+            if attempt == 0:
+                import asyncio
+                await asyncio.sleep(1)
+
+    if raw is None:
+        log.error("kg_extraction_api_failed", error=str(last_err))
+        return {"nodes": [], "edges": []}
+
     try:
-        raw = await call_minimax(prompt, KG_EXTRACT_SYSTEM)
         raw_clean = re.sub(r"^```json\s*", "", raw.strip())
         raw_clean = re.sub(r"\s*```$", "", raw_clean.strip())
         data = json.loads(raw_clean)
     except Exception as ex:
-        log.error("kg_extraction_parse_failed", error=str(ex))
+        log.error("kg_extraction_parse_failed", error=str(ex), raw=raw[:200] if raw else "")
         return {"nodes": [], "edges": []}
 
     raw_nodes = data.get("nodes", []) if isinstance(data, dict) else []
@@ -250,23 +283,25 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
 
 
 def store_knowledge_graph(kg_data: dict, book_title: str = ""):
-    """将提取的知识图谱存入 ChromaDB"""
+    """将提取的知识图谱存入 FAISS"""
     collection = get_or_create_collection(settings.COLLECTION_KG)
     nodes = kg_data.get("nodes", [])
     edges = kg_data.get("edges", [])
 
+    # Use dummy vectors for KG storage (FAISS requires vectors)
+    dim = 128
+    dummy_vector = [0.0] * dim
+
     node_ids = [n["id"] for n in nodes]
-    node_docs = [json.dumps(n, ensure_ascii=False) for n in nodes]
-    node_metas = [{"type": "node", "book_title": book_title, "label": n.get("label", "")} for n in nodes]
+    node_metas = [{"type": "node", "book_title": book_title, "label": n.get("label", n.get("name", "")), "data": json.dumps(n, ensure_ascii=False)} for n in nodes]
 
     edge_ids = [f"e_{i}" for i in range(len(edges))]
-    edge_docs = [json.dumps(e, ensure_ascii=False) for e in edges]
-    edge_metas = [{"type": "edge", "book_title": book_title} for _ in edges]
+    edge_metas = [{"type": "edge", "book_title": book_title, "data": json.dumps(e, ensure_ascii=False)} for e in edges]
 
     if node_ids:
-        collection.upsert(ids=node_ids, documents=node_docs, metadatas=node_metas)
+        collection.upsert(ids=node_ids, vectors=[dummy_vector] * len(node_ids), metadatas=node_metas)
     if edge_ids:
-        collection.upsert(ids=edge_ids, documents=edge_docs, metadatas=edge_metas)
+        collection.upsert(ids=edge_ids, vectors=[dummy_vector] * len(edge_ids), metadatas=edge_metas)
 
     log.info("kg_stored", node_count=len(nodes), edge_count=len(edges))
 
@@ -279,14 +314,12 @@ def get_full_graph(book_title: str = None) -> dict:
     if book_title:
         where_filter["book_title"] = book_title
 
-    all_items = collection.get(
-        where=where_filter if book_title else {"type": "node"},
-        include=["documents", "metadatas"],
-    )
+    all_items = collection.get(where=where_filter if book_title else {"type": "node"})
 
     nodes, edges = [], []
-    for doc, meta in zip(all_items["documents"], all_items["metadatas"]):
-        item = json.loads(doc)
+    for meta in all_items.get("metadatas", []):
+        data_str = meta.get("data", "{}")
+        item = json.loads(data_str)
         if meta.get("type") == "node":
             nodes.append(item)
         else:

@@ -58,7 +58,7 @@ class FAISSVectorStore:
             self._index = faiss.IndexFlatL2(dim)
             self._metadata = []
 
-    def upsert(self, ids: list[str], vectors: list[list[float]], metadatas: list[dict]):
+    def upsert(self, ids: list[str], vectors: list[list[float]] = None, metadatas: list[dict] = None, documents: list[str] = None):
         """
         插入或更新向量。
 
@@ -66,9 +66,14 @@ class FAISSVectorStore:
             ids: 文档 ID 列表
             vectors: 向量列表（如果为空字符串表示无向量）
             metadatas: 元数据列表
+            documents: 文档文本列表（从 metadata["text"] 提取或直接提供）
         """
         if not ids:
             return
+
+        # 处理文档文本
+        if documents is None and metadatas:
+            documents = [m.get("text", "") for m in metadatas]
 
         # 处理向量
         if vectors and all(len(v) > 0 for v in vectors):
@@ -84,11 +89,13 @@ class FAISSVectorStore:
             self._index.add(dummy_vectors)
 
         # 存储 metadata
-        for i, (doc_id, meta) in enumerate(zip(ids, metadatas)):
-            self._metadata.append({
-                "id": doc_id,
-                **meta,
-            })
+        for i, (doc_id, meta, doc_text) in enumerate(zip(ids, metadatas or [], documents or [])):
+            entry = {"id": doc_id}
+            if meta:
+                entry.update(meta)
+            if doc_text:
+                entry["text"] = doc_text
+            self._metadata.append(entry)
 
         self._save()
         log.info("faiss_upsert", name=self.name, count=len(ids))

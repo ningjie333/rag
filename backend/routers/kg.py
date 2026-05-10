@@ -22,7 +22,17 @@ async def get_graph(book_title: Optional[str] = Query(None)):
 
     try:
         graph_data = get_full_graph(book_title)
-        nodes = [KGNode(**n) for n in graph_data.get("nodes", [])]
+        # 转换节点格式以匹配 KGNode schema
+        raw_nodes = graph_data.get("nodes", [])
+        nodes = []
+        for n in raw_nodes:
+            nodes.append({
+                "id": n.get("id", ""),
+                "label": n.get("label", n.get("name", "")),
+                "type": n.get("category", "concept"),
+                "description": n.get("definition", n.get("description", "")),
+                "source": n.get("source", book_title or ""),
+            })
         edges = [KGEdge(**e) for e in graph_data.get("edges", [])]
 
         return GraphResponse(

@@ -12,7 +12,15 @@ CHROMA_DIR = DATA_DIR / "chroma_db"
 CHROMA_DIR.mkdir(exist_ok=True)
 
 class Settings(BaseSettings):
-    # API Keys
+    # LLM Provider: openai, minimax
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
+
+    # OpenAI
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.longcat.chat/openai")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "LongCat-2.0-Preview")
+
+    # MiniMax (fallback)
     MINIMAX_API_KEY: str = os.getenv("MINIMAX_API_KEY", "")
     MINIMAX_BASE_URL: str = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
     MINIMAX_MODEL: str = os.getenv("MINIMAX_MODEL", "MiniMax-Text-01")
@@ -37,6 +45,9 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
     TOP_K: int = 5
+
+    # Data directories
+    DATA_DIR: str = str(BASE_DIR / "data")
 
     class Config:
         env_file = ".env"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Graph } from '@antv/g6'
 import { get } from '@/api/client'
 import type { GraphData, KGNode, KGEdge } from '@/types'
@@ -10,8 +10,43 @@ const loading = ref(true)
 const selectedNode = ref<KGNode | null>(null)
 const graphData = ref<GraphData | null>(null)
 const zoomLevel = ref(1)
-const activeTab = ref<'graph' | 'compare'>('graph')
+const activeTab = ref<'graph' | 'compare' | 'sankey'>('graph')
 const showAllExamples = ref(false)
+const searchQuery = ref('')
+const selectedSources = ref<string[]>([])
+const showSourceDropdown = ref(false)
+
+const sankeyMockData = {
+  nodes: [
+    { id: 's1', name: '兽医诊断学', type: 'source' },
+    { id: 's2', name: '兽医内科学', type: 'source' },
+    { id: 's3', name: '兽医生理学', type: 'source' },
+    { id: 's4', name: '兽医治疗学', type: 'source' },
+    { id: 's5', name: '兽医微生物学', type: 'source' },
+    { id: 'c1', name: '心肌炎', type: 'concept' },
+    { id: 'c2', name: '心包积液', type: 'concept' },
+    { id: 'c3', name: '心力衰竭', type: 'concept' },
+    { id: 'c4', name: '细菌感染', type: 'concept' },
+    { id: 'f1', name: '心电图异常', type: 'fact' },
+    { id: 'f2', name: '利尿剂治疗', type: 'fact' },
+    { id: 'd1', name: '肌钙蛋白', type: 'definition' },
+    { id: 'd2', name: '炎症反应', type: 'definition' },
+  ],
+  links: [
+    { source: 's1', target: 'c1', value: 5 },
+    { source: 's2', target: 'c1', value: 3 },
+    { source: 's1', target: 'c2', value: 4 },
+    { source: 's2', target: 'c3', value: 6 },
+    { source: 's3', target: 'd2', value: 4 },
+    { source: 's4', target: 'f2', value: 3 },
+    { source: 's5', target: 'c4', value: 3 },
+    { source: 's1', target: 'f1', value: 2 },
+    { source: 's1', target: 'd1', value: 3 },
+    { source: 's2', target: 'f1', value: 2 },
+    { source: 's3', target: 'c1', value: 2 },
+    { source: 's2', target: 'd1', value: 1 },
+  ],
+}
 
 const mockCompression = {
   before: 150,
@@ -78,6 +113,12 @@ function getNodeType(node: KGNode): string {
 }
 
 function buildG6Data(data: GraphData) {
+  const shapeMap: Record<string, string> = {
+    concept: 'circle',
+    fact: 'rect',
+    definition: 'triangle',
+  }
+
   const nodes = data.nodes.map(node => ({
     id: node.id,
     label: node.label,
@@ -88,6 +129,7 @@ function buildG6Data(data: GraphData) {
       stroke: sourceColorMap[node.source] || '#94a3b8',
       lineWidth: 2,
       r: 20 + (node.frequency || 1) * 2,
+      shape: shapeMap[node.type] || 'circle',
     },
   }))
 
@@ -106,10 +148,67 @@ function buildG6Data(data: GraphData) {
   return { nodes, edges }
 }
 
+const filteredGraphData = computed(() => {
+  if (!graphData.value) return graphData.value
+  const query = searchQuery.value.trim().toLowerCase()
+  const sources = selectedSources.value
+  const nodes = graphData.value.nodes.filter(n => {
+    const matchQuery = !query || n.label.toLowerCase().includes(query) || n.description.toLowerCase().includes(query)
+    const matchSource = sources.length === 0 || sources.includes(n.source)
+    return matchQuery && matchSource
+  })
+  const nodeIds = new Set(nodes.map(n => n.id))
+  const edges = graphData.value.edges.filter(e => nodeIds.has(e.from_node) && nodeIds.has(e.to_node))
+  return { ...graphData.value, nodes, edges }
+})
+
+const allSources = computed(() => {
+  if (!graphData.value) return []
+  return [...new Set(graphData.value.nodes.map(n => n.source))].sort()
+})
+
+function toggleSource(source: string) {
+  const idx = selectedSources.value.indexOf(source)
+  if (idx >= 0) selectedSources.value.splice(idx, 1)
+  else selectedSources.value.push(source)
+}
+
+function clearFilters() {
+  searchQuery.value = ''
+  selectedSources.value = []
+}
+
+const flowChartWidth = 300
+const flowChartHeight = 400
+
+const sankeyPaths = computed(() => {
+  const sources = sankeyMockData.nodes.filter(n => n.type === 'source')
+  const targets = sankeyMockData.nodes.filter(n => n.type !== 'source')
+  const srcY: Record<string, number> = {}
+  const tgtY: Record<string, number> = {}
+  const srcSpacing = flowChartHeight / (sources.length + 1)
+  const tgtSpacing = flowChartHeight / (targets.length + 1)
+  sources.forEach((n, i) => { srcY[n.id] = srcSpacing * (i + 1) })
+  targets.forEach((n, i) => { tgtY[n.id] = tgtSpacing * (i + 1) })
+  const maxVal = Math.max(...sankeyMockData.links.map(l => l.value), 1)
+  const paths: string[] = []
+  sankeyMockData.links.forEach(link => {
+    const y1 = srcY[link.source] || 0
+    const y2 = tgtY[link.target] || 0
+    const thickness = Math.max(2, (link.value / maxVal) * 12)
+    const x1 = 0
+    const x2 = flowChartWidth
+    const midX = flowChartWidth / 2
+    const d = `M ${x1} ${y1 - thickness / 2} C ${midX} ${y1 - thickness / 2}, ${midX} ${y2 - thickness / 2}, ${x2} ${y2 - thickness / 2} L ${x2} ${y2 + thickness / 2} C ${midX} ${y2 + thickness / 2}, ${midX} ${y1 + thickness / 2}, ${x1} ${y1 + thickness / 2} Z`
+    paths.push(d)
+  })
+  return paths
+})
+
 function initGraph() {
   if (!containerRef.value || !graphData.value) return
 
-  const { nodes, edges } = buildG6Data(graphData.value)
+  const { nodes, edges } = buildG6Data(filteredGraphData.value || graphData.value)
 
   graph = new Graph({
     container: containerRef.value,
@@ -227,6 +326,14 @@ async function fetchGraph() {
 
 let resizeObserver: ResizeObserver | null = null
 
+watch([searchQuery, selectedSources], () => {
+  if (graph && filteredGraphData.value) {
+    const { nodes, edges } = buildG6Data(filteredGraphData.value)
+    graph.setData({ nodes, edges })
+    graph.render()
+  }
+})
+
 onMounted(async () => {
   await fetchGraph()
   initGraph()
@@ -254,8 +361,29 @@ onUnmounted(() => {
           <div class="tab-switcher">
             <button class="tab-btn" :class="{ active: activeTab === 'graph' }" @click="activeTab = 'graph'">🕸️ 图谱</button>
             <button class="tab-btn" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">📊 对比</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'sankey' }" @click="activeTab = 'sankey'">📈 流向</button>
           </div>
           <template v-if="activeTab === 'graph'">
+            <div class="search-box">
+              <input
+                v-model="searchQuery"
+                type="text"
+                class="input search-input"
+                placeholder="搜索节点..."
+              />
+              <div class="source-filter" @click.stop>
+                <button class="btn btn-outline btn-sm source-filter-btn" @click="showSourceDropdown = !showSourceDropdown">
+                  📚 来源{{ selectedSources.length > 0 ? ` (${selectedSources.length})` : '' }}
+                </button>
+                <div v-if="showSourceDropdown" class="source-dropdown">
+                  <label v-for="src in allSources" :key="src" class="source-option">
+                    <input type="checkbox" :checked="selectedSources.includes(src)" @change="toggleSource(src)" />
+                    <span>{{ src }}</span>
+                  </label>
+                  <div v-if="selectedSources.length > 0" class="source-clear" @click="clearFilters">清除筛选</div>
+                </div>
+              </div>
+            </div>
             <span class="zoom-badge">缩放: {{ Math.round(zoomLevel * 100) }}%</span>
             <div class="zoom-btns">
               <button class="btn btn-outline btn-sm" @click="handleZoomOut">−</button>
@@ -329,7 +457,45 @@ onUnmounted(() => {
           </div>
         </template>
 
-      <template v-if="activeTab === 'graph'">
+        <template v-else-if="activeTab === 'sankey'">
+          <div class="sankey-panel">
+            <div class="sankey-title">教材 → 知识点 流向图</div>
+            <div class="sankey-chart">
+              <div class="sankey-column sankey-sources">
+                <div class="sankey-col-title">教材来源</div>
+                <div v-for="src in sankeyMockData.nodes.filter(n => n.type === 'source')" :key="src.id" class="sankey-node source-node">
+                  {{ src.name }}
+                  <span class="node-count">{{ sankeyMockData.links.filter(l => l.source === src.id).reduce((s, l) => s + l.value, 0) }}</span>
+                </div>
+              </div>
+              <div class="sankey-flows">
+                <svg class="sankey-svg" :viewBox="`0 0 ${flowChartWidth} ${flowChartHeight}`">
+                  <defs>
+                    <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="#2563eb" stop-opacity="0.6" />
+                      <stop offset="100%" stop-color="#16a34a" stop-opacity="0.4" />
+                    </linearGradient>
+                  </defs>
+                  <path v-for="(path, idx) in sankeyPaths" :key="idx" :d="path" fill="url(#flowGrad)" stroke="none" />
+                </svg>
+              </div>
+              <div class="sankey-column sankey-targets">
+                <div class="sankey-col-title">知识点</div>
+                <div v-for="tgt in sankeyMockData.nodes.filter(n => n.type !== 'source')" :key="tgt.id" class="sankey-node" :class="`${tgt.type}-node`">
+                  {{ tgt.name }}
+                  <span class="node-count">{{ sankeyMockData.links.filter(l => l.target === tgt.id).reduce((s, l) => s + l.value, 0) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="sankey-legend">
+              <span class="legend-item"><span class="legend-dot concept-bg" /> 概念</span>
+              <span class="legend-item"><span class="legend-dot fact-bg" /> 事实</span>
+              <span class="legend-item"><span class="legend-dot definition-bg" /> 定义</span>
+            </div>
+          </div>
+        </template>
+
+        <template v-if="activeTab === 'graph'">
         <transition name="slide">
           <div v-if="selectedNode" class="node-detail-panel">
             <div class="detail-header">
@@ -349,9 +515,9 @@ onUnmounted(() => {
 
         <div class="graph-legend">
           <div class="legend-title">节点类型</div>
-          <div class="legend-item"><span class="legend-dot" style="background:#2563eb" /> 概念</div>
-          <div class="legend-item"><span class="legend-dot" style="background:#16a34a" /> 事实</div>
-          <div class="legend-item"><span class="legend-dot" style="background:#d97706" /> 定义</div>
+          <div class="legend-item"><span class="legend-shape legend-shape-circle" style="background:#2563eb" /> 概念 · 圆形</div>
+          <div class="legend-item"><span class="legend-shape legend-shape-rect" style="background:#16a34a" /> 事实 · 矩形</div>
+          <div class="legend-item"><span class="legend-shape legend-shape-triangle" style="--triangle-color:#d97706" /> 定义 · 三角形</div>
           <div class="legend-divider" />
           <div class="legend-title">教材来源</div>
           <div v-for="(color, source) in sourceColorMap" :key="source" class="legend-item">
@@ -542,6 +708,30 @@ onUnmounted(() => {
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.legend-shape {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.legend-shape-circle {
+  border-radius: 50%;
+}
+
+.legend-shape-rect {
+  border-radius: 2px;
+}
+
+.legend-shape-triangle {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 12px solid var(--triangle-color, #d97706);
+  background: transparent !important;
 }
 
 .legend-line {
@@ -861,4 +1051,193 @@ onUnmounted(() => {
   opacity: 0;
   transform: translateX(20px);
 }
+
+/* ===== 搜索框 + 来源筛选 ===== */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search-input {
+  width: 160px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.search-input:focus {
+  border-color: var(--color-primary);
+}
+
+.source-filter {
+  position: relative;
+}
+
+.source-filter-btn {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.source-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  min-width: 160px;
+  padding: 8px;
+}
+
+.source-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.source-option:hover {
+  background: var(--color-bg);
+}
+
+.source-clear {
+  margin-top: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  color: var(--color-danger);
+  cursor: pointer;
+  text-align: center;
+  border-top: 1px solid var(--color-border);
+}
+
+.source-clear:hover {
+  text-decoration: underline;
+}
+
+/* ===== 桑基图 ===== */
+.sankey-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.sankey-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.sankey-chart {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex: 1;
+  min-height: 350px;
+}
+
+.sankey-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.sankey-col-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sankey-node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: var(--radius);
+  background: #f1f5f9;
+  border: 1px solid var(--color-border);
+}
+
+.source-node {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: var(--color-primary);
+}
+
+.concept-node {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.fact-node {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.definition-node {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.node-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 8px;
+}
+
+.sankey-flows {
+  flex: 1;
+  position: relative;
+  min-width: 200px;
+}
+
+.sankey-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sankey-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.concept-bg { background: #2563eb; }
+.fact-bg { background: #16a34a; }
+.definition-bg { background: #d97706; }
 </style>

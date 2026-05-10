@@ -412,6 +412,47 @@ def remove_cycles(relations: list[dict], concepts: list[dict]) -> list[dict]:
     return relations
 
 
+def _is_similar(a: str, b: str, threshold: float = 0.7) -> bool:
+    """编辑距离相似度判断"""
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio() > threshold
+
+
+def _merge_two_concepts(existing: dict, concept: dict) -> dict:
+    """合并两个概念，保留较长 description，合并列表字段"""
+    # 保留较长 label/name
+    name_a = existing.get("name", existing.get("term", ""))
+    name_b = concept.get("name", concept.get("term", ""))
+    if len(name_b) > len(name_a):
+        if "name" in existing:
+            existing["name"] = concept.get("name", name_b)
+        if "term" in existing:
+            existing["term"] = concept.get("term", name_b)
+
+    # 合并 description：用逗号连接（去重）
+    desc_a = existing.get("description", "")
+    desc_b = concept.get("description", "")
+    if desc_b and desc_b not in desc_a:
+        existing["description"] = f"{desc_a}, {desc_b}" if desc_a else desc_b
+
+    # 合并别名
+    existing["aliases"] = list(set(existing.get("aliases", [])) | set(concept.get("aliases", [])))
+    # 合并相关术语
+    existing["relatedTerms"] = list(set(existing.get("relatedTerms", [])) | set(concept.get("relatedTerms", [])))
+    # 合并前置知识
+    existing["prerequisites"] = list(set(existing.get("prerequisites", [])) | set(concept.get("prerequisites", [])))
+    # 使用较高 confidence
+    existing["confidence"] = max(existing.get("confidence", 0), concept.get("confidence", 0))
+    # 使用较长 description（长度优先策略）
+    if len(concept.get("description", "")) > len(existing.get("description", "")):
+        existing["description"] = concept["description"]
+    # 合并来源
+    sources = set(existing.get("sources", []))
+    if concept.get("source"):
+        sources.add(concept["source"])
+    existing["sources"] = list(sources)
+    return existing
+
+
 def merge_duplicate_concepts(concepts: list[dict]) -> list[dict]:
     """
     合并重复概念。
@@ -419,42 +460,54 @@ def merge_duplicate_concepts(concepts: list[dict]) -> list[dict]:
     同名概念合并：aliases/relatedTerms/prerequisites 取并集，
     使用较高 confidence 和较长 description。
 
+    语义对齐：label 编辑距离相似度 > 0.7 的概念也合并，
+    保留较长 label，description 用逗号连接。
+
     Args:
         concepts: 概念列表
 
     Returns:
         去重后的概念列表
     """
-    merged = {}
+    if not concepts:
+        return []
 
-    for concept in concepts:
-        key = concept.get("name", concept.get("term", "")).lower().strip()
-        if not key:
-            continue
+    # 先标准化
+    for c in concepts:
+        c["aliases"] = c.get("aliases", [])
+        c["relatedTerms"] = c.get("relatedTerms", [])
+        c["prerequisites"] = c.get("prerequisites", [])
+        c["sources"] = [c["source"]] if c.get("source") else []
 
-        if key in merged:
-            existing = merged[key]
-            # 合并别名
-            existing["aliases"] = list(set(existing.get("aliases", [])) | set(concept.get("aliases", [])))
-            # 合并相关术语
-            existing["relatedTerms"] = list(set(existing.get("relatedTerms", [])) | set(concept.get("relatedTerms", [])))
-            # 合并前置知识
-            existing["prerequisites"] = list(set(existing.get("prerequisites", [])) | set(concept.get("prerequisites", [])))
-            # 使用较高 confidence
-            existing["confidence"] = max(existing.get("confidence", 0), concept.get("confidence", 0))
-            # 使用较长 description
-            if len(concept.get("description", "")) > len(existing.get("description", "")):
-                existing["description"] = concept["description"]
-            # 合并来源
-            sources = set(existing.get("sources", []))
-            if concept.get("source"):
-                sources.add(concept["source"])
-            existing["sources"] = list(sources)
-        else:
-            concept["aliases"] = concept.get("aliases", [])
-            concept["relatedTerms"] = concept.get("relatedTerms", [])
-            concept["prerequisites"] = concept.get("prerequisites", [])
-            concept["sources"] = [concept["source"]] if concept.get("source") else []
-            merged[key] = concept
+    result = list(concepts)
 
-    return list(merged.values())
+    i = 0
+    while i < len(result):
+        j = i + 1
+        while j < len(result):
+            name_i = result[i].get("name", result[i].get("term", "")).strip()
+            name_j = result[j].get("name", result[j].get("term", "")).strip()
+
+            if not name_i or not name_j:
+                j += 1
+                continue
+
+            # 精确匹配（不区分大小写）
+            if name_i.lower() == name_j.lower():
+                result[i] = _merge_two_concepts(result[i], result.pop(j))
+                log.info("merge_exact", concept_a=name_i, concept_b=name_j)
+                continue
+
+            # 语义对齐：编辑距离相似度 > 0.7
+            if _is_similar(name_i, name_j, threshold=0.7):
+                # 保留较长 label
+                if len(name_j) > len(name_i):
+                    result[i], result[j] = result[j], result[i]
+                result[i] = _merge_two_concepts(result[i], result.pop(j))
+                log.info("merge_similar", concept_a=name_i, concept_b=name_j)
+                continue
+
+            j += 1
+        i += 1
+
+    return result

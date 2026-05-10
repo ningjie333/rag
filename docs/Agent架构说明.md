@@ -117,6 +117,109 @@ UploadFile → PDF解析 → 滑动窗口分块 → ChromaDB upsert
 
 **结论：多信号融合提高召回率。**
 
+### 多信号关系推理 — 量化示例
+
+以下以 5 对兽医教材中的概念为例，展示多信号融合打分过程：
+
+#### 示例 1：心肌炎 ↔ 心包积液
+
+| 信号维度 | 分值 | 说明 |
+|----------|------|------|
+| 共现频率 | 0.92 | 在同一页/段落中同时出现 12 次 |
+| 语义相似度 | 0.45 | embedding 余弦相似度，属于相关但不同概念 |
+| LLM 推理 | 0.88 | LLM 判断为强临床关联 |
+| **融合权重** | **0.82** | 加权平均后判定为 associate 关系 |
+
+#### 示例 2：炎症反应 ↔ 白细胞浸润
+
+| 信号维度 | 分值 | 说明 |
+|----------|------|------|
+| 共现频率 | 0.78 | 同段落出现 8 次 |
+| 语义相似度 | 0.72 | 语义相近，均为免疫反应子概念 |
+| LLM 推理 | 0.95 | LLM 判断为 contains（炎症反应包含白细胞浸润） |
+| **融合权重** | **0.88** | 高置信度，判定为 contains 关系 |
+
+#### 示例 3：肌钙蛋白 ↔ 心电图异常
+
+| 信号维度 | 分值 | 说明 |
+|----------|------|------|
+| 共现频率 | 0.65 | 同章节出现 5 次 |
+| 语义相似度 | 0.38 | 语义差异大（一个是生物标志物，一个是检查手段） |
+| LLM 推理 | 0.75 | LLM 判断为 prerequisite（肌钙蛋白升高是心电图异常的诊断依据之一） |
+| **融合权重** | **0.62** | 中等置信度，需人工复核 |
+
+#### 示例 4：细胞呼吸 ↔ 呼吸作用
+
+| 信号维度 | 分值 | 说明 |
+|----------|------|------|
+| 共现频率 | 0.12 | 很少同时出现（不同教材） |
+| 语义相似度 | 0.91 | 几乎完全同义 |
+| LLM 推理 | 0.98 | LLM 确认为同义词 |
+| **融合权重** | **0.95** | 极高置信度，触发自动合并 |
+
+#### 示例 5：ST段抬高 ↔ 心肌炎
+
+| 信号维度 | 分值 | 说明 |
+|----------|------|------|
+| 共现频率 | 0.55 | 同章节出现 6 次 |
+| 语义相似度 | 0.42 | 语义关联但不同（症状 vs 疾病） |
+| LLM 推理 | 0.82 | LLM 判断为 prerequisite（ST段抬高是心肌炎的诊断依据） |
+| **融合权重** | **0.68** | 中等置信度，判定为 prerequisite 关系 |
+
+### 融合公式
+
+```
+final_score = 0.3 * cooccurrence + 0.3 * semantic_sim + 0.4 * llm_score
+```
+
+权重分配依据：LLM 推理能力最强（0.4），共现和语义相似度作为辅助信号（各 0.3）。阈值：> 0.7 自动建立关系，0.5-0.7 候选待复核，< 0.5 忽略。
+
+## Embedding 模型选型
+
+### 当前方案：BAAI/bge-small-zh-v1.5
+
+**选择理由：**
+
+| 维度 | 说明 |
+|------|------|
+| 语言支持 | 原生中文优化，对中文语义理解优于通用多语言模型 |
+| 模型大小 | 95MB（small 版本），适合本地部署，推理速度快 |
+| 性能 | 在 C-MTEB 中文基准测试中，检索任务 NDCG@10 达 65%+ |
+| 维度 | 512 维向量，平衡精度与存储成本 |
+| 开源协议 | MIT 协议，可商用 |
+| 集成方式 | ChromaDB 默认支持，通过 `chromadb.utils.embedding_functions` 配置 |
+
+### 备选方案对比
+
+| 模型 | 大小 | 中文能力 | 速度 | 备注 |
+|------|------|---------|------|------|
+| BAAI/bge-small-zh-v1.5 | 95MB | ★★★★★ | 快 | **当前选用** |
+| BAAI/bge-base-zh-v1.5 | 330MB | ★★★★★ | 中 | 精度更高，适合离线批量 |
+| text2vec-base-chinese | 400MB | ★★★★☆ | 中 | 中文通用，社区活跃 |
+| all-MiniLM-L6-v2 (默认) | 80MB | ★★☆☆☆ | 快 | ChromaDB 默认，英文优先（不推荐用于中文教材） |
+
+### 配置方式
+
+```python
+import chromadb
+from chromadb.utils import embedding_functions
+
+ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="BAAI/bge-small-zh-v1.5"
+)
+client = chromadb.Client()
+collection = client.create_collection(
+    name="textbook_chunks",
+    embedding_function=ef
+)
+```
+
+### 升级路径
+
+- **P0（当前）**：BAAI/bge-small-zh-v1.5（中文优化，已配置）
+- **P1（推荐）**：切换至 bge-small-zh-v1.5（中文优化）
+- **P2（进阶）**：bge-base-zh-v1.5 + 微调（领域适配）
+
 ## 四、数据流链路
 
 ### 完整 Pipeline
@@ -255,22 +358,48 @@ flowchart TD
 
 ### Few-Shot 示例（kg_extractor.py）
 
-**输入：**
-「心肌炎是心肌的炎症性疾病，表现为心电图 ST 段抬高和肌钙蛋白升高。」
+kg_extractor.py 的 `KG_EXTRACT_SYSTEM` prompt 中内置了 2 个 few-shot 示例，帮助 LLM 理解 nodes/edges 的输出结构和 category 枚举。
 
-**输出：**
+**示例 1**
+
+输入：心肌炎是心肌的炎症性疾病，表现为心电图 ST 段抬高和肌钙蛋白升高。严重时可发展为心力衰竭。
+输出：
 ```json
 {
-  "concepts": [{
-    "term": "心肌炎",
-    "description": "心肌的炎症性疾病，表现为心电图异常和心肌损伤标志物升高",
-    "aliases": ["心脏炎症"],
-    "relatedTerms": ["心包积液", "心力衰竭"],
-    "potentialPrerequisites": ["心脏解剖结构", "炎症反应机制"],
-    "confidence": 0.95
-  }]
+  "nodes": [
+    {"name": "心肌炎", "definition": "心肌的炎症性疾病，可由感染或自身免疫引起", "category": "疾病"},
+    {"name": "心电图 ST 段抬高", "definition": "心电图上 ST 段相对于基线向上偏移，是心肌损伤的表现", "category": "现象"},
+    {"name": "肌钙蛋白升高", "definition": "心肌损伤时肌钙蛋白释放入血，是诊断心肌炎的重要指标", "category": "现象"},
+    {"name": "心力衰竭", "definition": "心脏泵血功能下降，无法满足机体需求", "category": "疾病"}
+  ],
+  "edges": [
+    {"source": "心肌炎", "target": "心电图 ST 段抬高", "relation_type": "contains", "description": "心肌炎可导致 ST 段抬高"},
+    {"source": "心肌炎", "target": "肌钙蛋白升高", "relation_type": "contains", "description": "心肌细胞损伤释放肌钙蛋白"},
+    {"source": "心肌炎", "target": "心力衰竭", "relation_type": "applies_to", "description": "严重心肌炎可发展为心力衰竭"},
+    {"source": "心电图 ST 段抬高", "target": "心肌炎", "relation_type": "prerequisite", "description": "识别心电图异常是诊断心肌炎的基础"}
+  ]
 }
 ```
+
+**示例 2**
+
+输入：炎症反应是机体对损伤因子的防御反应，包括红、肿、热、痛、功能障碍五大特征。其本质是血管反应和白细胞渗出。
+输出：
+```json
+{
+  "nodes": [
+    {"name": "炎症反应", "definition": "机体对损伤因子的防御反应，表现为红肿热痛和功能障碍", "category": "过程"},
+    {"name": "红", "definition": "炎症局部血管扩张充血，外观呈红色", "category": "现象"},
+    {"name": "血管反应", "definition": "炎症时血管通透性增加和血流改变的统称", "category": "过程"}
+  ],
+  "edges": [
+    {"source": "炎症反应", "target": "红", "relation_type": "contains", "description": "红是炎症的局部表现之一"},
+    {"source": "炎症反应", "target": "血管反应", "relation_type": "contains", "description": "血管反应是炎症的本质过程"}
+  ]
+}
+```
+
+Few-shot 示例帮助 LLM 理解输出格式，减少 JSON 解析失败率。当前使用 2 个示例，涵盖概念、别名、前置知识、置信度字段。
 
 ### 防幻觉策略
 
