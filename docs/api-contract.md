@@ -22,10 +22,11 @@ http://localhost:3002/api
 | A2 | POST | /api/query | RAG 检索问答 | JSON: `{ question, top_k }` | `{ answer, citations[], graph_context }` |
 | A3 | GET | /api/graph | 获取知识图谱 | query: book_title (可选) | `{ nodes[], edges[], total_nodes, total_edges }` |
 | A4 | POST | /api/graph/build | 触发图谱构建 | — | `{ success, message }` |
-| A5 | POST | /api/graph/merge | 跨教材整合压缩 | — | `{ success, ratio, message }` |
+| A5 | POST | /api/graph/merge | 跨教材整合压缩 | — | `{ success, ratio, message, stats, dual_alignment, compression_detail }` |
 | A6 | POST | /api/chat | 多轮对话 | JSON: `{ messages[], context }` | `{ reply, citations[], graph_snapshot }` |
 | A7 | GET | /api/books | 书籍列表 | — | `{ books[] }` |
 | A8 | GET | /health | 健康检查 | — | `{ status, service }` |
+| A9 | POST | /api/feedback | 提交反馈更新图谱 | JSON: `{ feedback_type, node_id?, relation_from?, relation_to?, content? }` | `{ success, message, updated }` |
 
 ---
 
@@ -158,6 +159,29 @@ curl -s "http://localhost:3002/api/graph?book_title=兽医诊断学" | jq .
 # 书籍列表
 curl -s http://localhost:3002/api/books | jq .
 ```
+
+---
+
+### Merge 响应扩展字段
+
+#### dual_alignment
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| surface_matches | int | 表面匹配（完全同名 + 同义词表）数量 |
+| semantic_matches | int | 语义匹配（字符串相似度 > 0.85）数量 |
+| total_aligned | int | 总对齐数量 |
+| examples | list | 前5个匹配示例，含 concept_a / concept_b / merged_as |
+
+#### compression_detail
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| before | int | 原始节点数 |
+| after_dedup | int | 去重后节点数 |
+| after_alignment | int | 对齐后节点数 |
+| surface_ratio | float | 去重压缩比 |
+| semantic_ratio | float | 最终压缩比 |
 
 ---
 

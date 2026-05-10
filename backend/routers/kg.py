@@ -5,7 +5,7 @@ from typing import Optional
 
 from models.schemas import GraphResponse, KGNode, KGEdge
 from vector_store.kg_extractor import extract_knowledge_graph, store_knowledge_graph, get_full_graph
-from vector_store.relation_inferrer import infer_all_relations, remove_cycles, merge_duplicate_concepts
+from vector_store.relation_inferrer import infer_all_relations, remove_cycles, merge_duplicate_concepts, dual_align_concepts
 from vector_store.chroma_client import get_or_create_collection
 
 router = APIRouter()
@@ -171,6 +171,35 @@ async def merge_graphs(target_ratio: float = Query(0.3, description="目标压�
         store_knowledge_graph(merged_graph, "_merged_")
 
         achieved_ratio = merged_count / original_count if original_count else 1.0
+
+        dual_alignment = {"surface_matches": 0, "semantic_matches": 0, "total_aligned": 0, "examples": []}
+        try:
+            align_result = dual_align_concepts(nodes)
+            surface_count = len(align_result["surface_matches"])
+            semantic_count = len(align_result["semantic_matches"])
+            dual_alignment = {
+                "surface_matches": surface_count,
+                "semantic_matches": semantic_count,
+                "total_aligned": align_result["total_aligned"],
+                "examples": (
+                    align_result["surface_matches"][:3] + align_result["semantic_matches"][:2]
+                )[:5],
+            }
+        except Exception as align_err:
+            log.warning("dual_align_failed", error=str(align_err))
+
+        compression_detail = {
+            "before": original_count,
+            "after_dedup": merged_count,
+            "after_alignment": max(merged_count - dual_alignment["total_aligned"], 1),
+            "surface_ratio": round(merged_count / original_count, 2) if original_count else 1.0,
+            "semantic_ratio": round(
+                max(merged_count - dual_alignment["total_aligned"], 1) / original_count, 2
+            )
+            if original_count
+            else 1.0,
+        }
+
         return {
             "success": True,
             "ratio": achieved_ratio,
@@ -182,6 +211,8 @@ async def merge_graphs(target_ratio: float = Query(0.3, description="目标压�
                 "achieved_ratio": achieved_ratio,
                 "edges": len(edges),
             },
+            "dual_alignment": dual_alignment,
+            "compression_detail": compression_detail,
         }
 
     except Exception as e:

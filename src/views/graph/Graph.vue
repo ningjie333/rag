@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Graph } from '@antv/g6'
 import { get } from '@/api/client'
 import type { GraphData, KGNode, KGEdge } from '@/types'
@@ -10,6 +10,24 @@ const loading = ref(true)
 const selectedNode = ref<KGNode | null>(null)
 const graphData = ref<GraphData | null>(null)
 const zoomLevel = ref(1)
+const activeTab = ref<'graph' | 'compare'>('graph')
+const showAllExamples = ref(false)
+
+const mockCompression = {
+  before: 150,
+  after_dedup: 120,
+  after_alignment: 42,
+  surface_ratio: 0.80,
+  semantic_ratio: 0.28,
+}
+
+const mockExamples = [
+  { conceptA: '细胞呼吸（兽医生理学）', conceptB: '呼吸作用（兽医内科学）', mergedAs: '细胞呼吸/呼吸作用' },
+  { conceptA: '心肌炎（兽医内科学）', conceptB: '心肌炎症（兽医诊断学）', mergedAs: '心肌炎' },
+  { conceptA: '心音混浊', conceptB: '心音异常', mergedAs: '心音异常' },
+  { conceptA: '炎症反应', conceptB: '炎性应答', mergedAs: '炎症反应' },
+  { conceptA: 'ST段抬高', conceptB: 'ST段上升', mergedAs: 'ST段抬高' },
+]
 
 let graph: Graph | null = null
 
@@ -229,51 +247,118 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="graph-view">
-    <div class="graph-toolbar">
-      <span class="graph-title">知识图谱</span>
-      <div class="toolbar-info">
-        <span class="zoom-badge">缩放: {{ Math.round(zoomLevel * 100) }}%</span>
-        <div class="zoom-btns">
-          <button class="btn btn-outline btn-sm" @click="handleZoomOut">−</button>
-          <button class="btn btn-outline btn-sm" @click="handleZoomIn">+</button>
-          <button class="btn btn-outline btn-sm" @click="handleFitView">适应</button>
+    <div class="graph-view">
+      <div class="graph-toolbar">
+        <span class="graph-title">知识图谱</span>
+        <div class="toolbar-info">
+          <div class="tab-switcher">
+            <button class="tab-btn" :class="{ active: activeTab === 'graph' }" @click="activeTab = 'graph'">🕸️ 图谱</button>
+            <button class="tab-btn" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">📊 对比</button>
+          </div>
+          <template v-if="activeTab === 'graph'">
+            <span class="zoom-badge">缩放: {{ Math.round(zoomLevel * 100) }}%</span>
+            <div class="zoom-btns">
+              <button class="btn btn-outline btn-sm" @click="handleZoomOut">−</button>
+              <button class="btn btn-outline btn-sm" @click="handleZoomIn">+</button>
+              <button class="btn btn-outline btn-sm" @click="handleFitView">适应</button>
+            </div>
+          </template>
         </div>
       </div>
-    </div>
 
-    <div class="graph-main">
-      <LoadingSpinner v-if="loading" text="加载图谱中..." />
-      <div v-show="!loading" ref="containerRef" class="graph-container" />
+      <div class="graph-main">
+        <template v-if="activeTab === 'graph'">
+          <LoadingSpinner v-if="loading" text="加载图谱中..." />
+          <div v-show="!loading" ref="containerRef" class="graph-container" />
+        </template>
 
-      <transition name="slide">
-        <div v-if="selectedNode" class="node-detail-panel">
-          <div class="detail-header">
-            <span class="detail-type-badge" :style="{ background: typeColorMap[selectedNode.type] }">
-              {{ selectedNode.type === 'concept' ? '概念' : selectedNode.type === 'fact' ? '事实' : '定义' }}
-            </span>
-            <button class="detail-close" @click="selectedNode = null">✕</button>
+        <template v-else>
+          <div class="compare-panel">
+            <div class="compare-stat-bar">
+              <span class="stat-main">整合前: <strong>{{ mockCompression.before }}</strong> 个节点 &rarr; 整合后: <strong>{{ mockCompression.after_alignment }}</strong> 个节点</span>
+              <div class="stat-tags">
+                <span class="stat-tag">压缩比: {{ Math.round(mockCompression.semantic_ratio * 100) }}%</span>
+                <span class="stat-tag stat-tag-surface">表面匹配: 15</span>
+                <span class="stat-tag stat-tag-semantic">语义匹配: 23</span>
+              </div>
+            </div>
+
+            <div class="compression-bar-section">
+              <div class="compression-label">压缩过程</div>
+              <div class="compression-track">
+                <div class="compression-step step-before">
+                  <div class="step-value">{{ mockCompression.before }}</div>
+                  <div class="step-label">原始</div>
+                </div>
+                <div class="compression-arrow">
+                  <div class="arrow-line"></div>
+                  <div class="arrow-label">去重</div>
+                </div>
+                <div class="compression-step step-dedup">
+                  <div class="step-value">{{ mockCompression.after_dedup }}</div>
+                  <div class="step-label">去重后</div>
+                </div>
+                <div class="compression-arrow">
+                  <div class="arrow-line"></div>
+                  <div class="arrow-label">对齐</div>
+                </div>
+                <div class="compression-step step-final">
+                  <div class="step-value">{{ mockCompression.after_alignment }}</div>
+                  <div class="step-label">对齐后</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="examples-section">
+              <div class="examples-header" @click="showAllExamples = !showAllExamples">
+                <span class="examples-title">去重示例</span>
+                <span class="examples-toggle">{{ showAllExamples ? '收起 ▲' : '展开 ▼' }}</span>
+              </div>
+              <transition name="expand">
+                <ul v-if="showAllExamples" class="examples-list">
+                  <li v-for="(ex, idx) in mockExamples" :key="idx" class="example-item">
+                    <span class="ex-a">{{ ex.conceptA }}</span>
+                    <span class="ex-equiv">&equiv;</span>
+                    <span class="ex-b">{{ ex.conceptB }}</span>
+                    <span class="ex-arrow">&rarr;</span>
+                    <span class="ex-merged">{{ ex.mergedAs }}</span>
+                  </li>
+                </ul>
+              </transition>
+            </div>
           </div>
-          <div class="detail-title">{{ selectedNode.label }}</div>
-          <div class="detail-desc">{{ selectedNode.description }}</div>
-          <div class="detail-meta">
-            <span class="meta-item">📚 {{ selectedNode.source }}</span>
-            <span class="meta-item">📊 频次: {{ selectedNode.frequency }}</span>
+        </template>
+
+      <template v-if="activeTab === 'graph'">
+        <transition name="slide">
+          <div v-if="selectedNode" class="node-detail-panel">
+            <div class="detail-header">
+              <span class="detail-type-badge" :style="{ background: typeColorMap[selectedNode.type] }">
+                {{ selectedNode.type === 'concept' ? '概念' : selectedNode.type === 'fact' ? '事实' : '定义' }}
+              </span>
+              <button class="detail-close" @click="selectedNode = null">✕</button>
+            </div>
+            <div class="detail-title">{{ selectedNode.label }}</div>
+            <div class="detail-desc">{{ selectedNode.description }}</div>
+            <div class="detail-meta">
+              <span class="meta-item">📚 {{ selectedNode.source }}</span>
+              <span class="meta-item">📊 频次: {{ selectedNode.frequency }}</span>
+            </div>
+          </div>
+        </transition>
+
+        <div class="graph-legend">
+          <div class="legend-title">节点类型</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#2563eb" /> 概念</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#16a34a" /> 事实</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#d97706" /> 定义</div>
+          <div class="legend-divider" />
+          <div class="legend-title">教材来源</div>
+          <div v-for="(color, source) in sourceColorMap" :key="source" class="legend-item">
+            <span class="legend-line" :style="{ background: color }" /> {{ source }}
           </div>
         </div>
-      </transition>
-
-      <div class="graph-legend">
-        <div class="legend-title">节点类型</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#2563eb" /> 概念</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#16a34a" /> 事实</div>
-        <div class="legend-item"><span class="legend-dot" style="background:#d97706" /> 定义</div>
-        <div class="legend-divider" />
-        <div class="legend-title">教材来源</div>
-        <div v-for="(color, source) in sourceColorMap" :key="source" class="legend-item">
-          <span class="legend-line" :style="{ background: color }" /> {{ source }}
-        </div>
-      </div>
+      </template>
     </div>
 
     <div v-if="graphData" class="graph-footer">
@@ -483,6 +568,287 @@ onUnmounted(() => {
 .footer-stat {
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.tab-switcher {
+  display: flex;
+  gap: 2px;
+  background: var(--color-bg);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.tab-btn {
+  border: none;
+  background: transparent;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+  transition: all var(--transition);
+  position: relative;
+}
+
+.tab-btn:hover {
+  color: var(--color-text);
+}
+
+.tab-btn.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 2px;
+  background: var(--color-primary);
+  border-radius: 1px;
+}
+
+.compare-panel {
+  padding: 24px;
+  height: 100%;
+  overflow-y: auto;
+  background: #fafbfc;
+}
+
+.compare-stat-bar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stat-main {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.stat-main strong {
+  color: var(--color-primary);
+  font-size: 18px;
+}
+
+.stat-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat-tag {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stat-tag-surface {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.stat-tag-semantic {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.compression-bar-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.compression-label {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--color-text);
+}
+
+.compression-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.compression-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  min-width: 80px;
+}
+
+.step-before {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.step-dedup {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.step-final {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.step-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.compression-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.arrow-line {
+  width: 40px;
+  height: 2px;
+  background: var(--color-border);
+  position: relative;
+}
+
+.arrow-line::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: -3px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid var(--color-border);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.arrow-label {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+.examples-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.examples-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition);
+}
+
+.examples-header:hover {
+  background: var(--color-bg);
+}
+
+.examples-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.examples-toggle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.examples-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px 16px;
+}
+
+.example-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+}
+
+.example-item:last-child {
+  border-bottom: none;
+}
+
+.ex-a {
+  color: #dc2626;
+  font-weight: 500;
+  max-width: 35%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-equiv {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.ex-b {
+  color: #d97706;
+  font-weight: 500;
+  max-width: 35%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ex-arrow {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.ex-merged {
+  color: #16a34a;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.2s ease;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
 }
 
 .slide-enter-active,

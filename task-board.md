@@ -180,6 +180,23 @@ FE-8 ◄────────────────────────
 
 ---
 
+## 🎯 P1 进阶加分项 Agent
+
+| 任务ID | 描述 | 提示词文件 | 状态 |
+|--------|------|----------|------|
+| P1-ADV-DOCX | DOCX/Excel 支持 | `docs/docx-excel-agent-prompt.md` | ⏳ |
+| P1-ADV-FEEDBACK | 反馈→图谱更新 | `docs/feedback-agent-prompt.md` | ✅ 完成 | POST /api/feedback + Chat.vue 反馈按钮 |
+| P1-ADV-DUAL | 双重对齐+可视化对比 | `docs/dual-alignment-agent-prompt.md` | ✅ 完成 @05-10 | 双重对齐 + Graph.vue 整合对比 Tab |
+
+## 🎯 P1 独立可做 Agent
+
+| 任务ID | 描述 | 提示词文件 | 状态 | 分配 |
+|--------|------|----------|------|------|
+| P1-FEWSHOT | Few-Shot 示例 | `docs/fewshot-agent-prompt.md` | ⏳ | 后端 |
+| P1-HYBRID | 混合检索+Rerank | `docs/hybrid-search-agent-prompt.md` | ⏳ | 后端 |
+
+---
+
 ## 📝 笔记
 
 （调控台随时记录关键决策）

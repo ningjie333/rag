@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from routers import upload, query, kg, chat, books, report
+from routers import upload, query, kg, chat, books, report, feedback
 
 structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -51,6 +51,7 @@ app.include_router(kg.router, prefix="/api", tags=["knowledge-graph"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(books.router, prefix="/api", tags=["books"])
 app.include_router(report.router, prefix="/api", tags=["report"])
+app.include_router(feedback.router, prefix="/api", tags=["feedback"])
 
 
 if __name__ == "__main__":

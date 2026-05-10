@@ -3,20 +3,20 @@ import structlog
 from fastapi import APIRouter, Query
 
 from models.schemas import QueryRequest, QueryResponse, Citation
-from vector_store.query_engine import search_chunks
+from vector_store.query_engine import search_chunks, get_graph_context
 from vector_store.kg_extractor import call_minimax
 
 router = APIRouter()
 log = structlog.get_logger()
 
 # RAG 生成提示词
-RAG_SYSTEM = """你是一个专业的学科助教。基于检索到的教材内容，准确回答学生问题。
+RAG_SYSTEM = """你是一个专业的学科助教。基于检索到的教材内容和知识图谱上下文，准确回答学生问题。
 
 要求：
 1. 只基于提供的引用内容回答，不要编造
 2. 如果引用内容不足以回答，明确说明
-3. 回答要清晰、有条理
-4. 适当引用原文（用"【来源：页码】"标注）
+3. 回答要清晰、有条理，适当引用原文（用"【来源：页码】"标注）
+4. 优先使用知识图谱中的关系路径来构建更完整的答案
 
 回答格式：
 [回答内容]
@@ -27,6 +27,7 @@ RAG_USER_TPL = """问题：{question}
 参考内容：
 {context}
 
+{graph_section}
 请基于以上内容回答问题。"""
 
 
@@ -55,13 +56,31 @@ async def query_question(req: QueryRequest, book_title: str = Query(None)):
 
         context = "\n---\n".join(context_parts)
 
-        # 3. 调用 LLM 生成回答
-        user_prompt = RAG_USER_TPL.format(question=req.question, context=context)
-        answer = await call_minimax(user_prompt, RAG_SYSTEM)
+        # 3. 获取图谱上下文（GraphRAG）
+        chunks_for_graph = [{"text": c.text} for c in citations]
+        knowledge_paths, matched_entities = get_graph_context(req.question, chunks_for_graph)
 
-        # 4. 获取图谱上下文（如果有相关节点）
-        graph_context = {}
-        # TODO: 后续接入图谱查询
+        if knowledge_paths:
+            graph_section = f"""知识图谱关系：
+{chr(10).join(knowledge_paths)}
+
+匹配的概念节点：{', '.join(matched_entities) if matched_entities else '无'}
+"""
+        else:
+            graph_section = ""
+
+        graph_context = {
+            "knowledge_paths": knowledge_paths,
+            "matched_entities": matched_entities,
+        }
+
+        # 4. 调用 LLM 生成回答
+        user_prompt = RAG_USER_TPL.format(
+            question=req.question,
+            context=context,
+            graph_section=graph_section,
+        )
+        answer = await call_minimax(user_prompt, RAG_SYSTEM)
 
         return QueryResponse(
             answer=answer,
