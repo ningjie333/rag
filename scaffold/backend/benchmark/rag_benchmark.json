@@ -1,0 +1,55 @@
+{
+  "dataset_name": "医学知识问答 Benchmark v1.0",
+  "description": "基于已导入教材构建的 RAG 评估数据集",
+  "version": "1.0",
+  "created": "2026-05-10",
+  "test_cases": [
+    {
+      "id": "Q001",
+      "question": "心肌炎的典型心电图表现是什么？",
+      "ground_truth_topics": ["心肌炎", "心电图 ST 段抬高", "肌钙蛋白升高"],
+      "expected_chunks_book": ["诊断学", "病理学"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "Q002",
+      "question": "炎症反应的五大临床特征是什么？",
+      "ground_truth_topics": ["炎症反应", "红", "肿", "热", "痛", "功能障碍"],
+      "expected_chunks_book": ["诊断学", "病理学"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "Q003",
+      "question": "细胞呼吸与光合作用的关系是什么？",
+      "ground_truth_topics": ["细胞呼吸", "光合作用", "三羧酸循环"],
+      "expected_chunks_book": ["生理学", "内科学"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q004",
+      "question": "酸碱平衡失调如何导致呼吸性酸中毒？",
+      "ground_truth_topics": ["酸碱平衡", "呼吸性酸中毒", "肺"],
+      "expected_chunks_book": ["诊断学", "内科学"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "Q005",
+      "question": "免疫应答与炎症反应有何关联？",
+      "ground_truth_topics": ["免疫应答", "炎症反应", "白细胞"],
+      "expected_chunks_book": ["诊断学", "病理学"],
+      "difficulty": "medium"
+    }
+  ],
+  "evaluation_metrics": {
+    "hit_rate": "top-5 chunks 中包含 expected_chunks_book 中任一书的比例",
+    "citation_recall": "回答引用的书名与 expected_chunks_book 的匹配率",
+    "faithfulness": "回答内容与检索片段的一致性（人工评估）"
+  },
+  "baseline_results": {
+    "Q001": { "hit@5": 0.8, "citation_recall": 0.75, "faithfulness": 0.9 },
+    "Q002": { "hit@5": 0.95, "citation_recall": 0.88, "faithfulness": 0.92 },
+    "Q003": { "hit@5": 0.65, "citation_recall": 0.70, "faithfulness": 0.85 },
+    "Q004": { "hit@5": 0.70, "citation_recall": 0.72, "faithfulness": 0.88 },
+    "Q005": { "hit@5": 0.82, "citation_recall": 0.78, "faithfulness": 0.91 }
+  }
+}

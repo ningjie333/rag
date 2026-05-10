@@ -1,0 +1,9 @@
+services:
+  backend:
+    volumes:
+      - ./backend:/app/backend
+    environment:
+      - DEBUG=true
+  frontend:
+    ports:
+      - "5173:80"
