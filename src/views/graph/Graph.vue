@@ -98,11 +98,11 @@ const typeColorMap: Record<string, string> = {
 }
 
 const sourceColorMap: Record<string, string> = {
-  '诊断学': '#8b5cf6',
-  '内科学': '#ec4899',
-  '生理学': '#f97316',
-  '治疗学': '#06b6d4',
-  '微生物学': '#14b8a6',
+  '01_局部解剖学': '#3b82f6',
+  '02_组织学与胚胎学': '#8b5cf6',
+  '03_生理学': '#f97316',
+  '04_医学微生物学': '#14b8a6',
+  '06_传染病学': '#ec4899',
 }
 
 function getNodeType(node: KGNode): string {
@@ -113,37 +113,52 @@ function getNodeType(node: KGNode): string {
 }
 
 function buildG6Data(data: GraphData) {
-  const shapeMap: Record<string, string> = {
-    concept: 'circle',
-    fact: 'rect',
-    definition: 'triangle',
-  }
+  const nodes = data.nodes.map(node => {
+    const degree = node.frequency || 1
+    // 按度数分大小：缩小半径避免遮挡
+    let r: number
+    if (degree >= 8) r = 14
+    else if (degree >= 4) r = 10
+    else r = 6
 
-  const nodes = data.nodes.map(node => ({
-    id: node.id,
-    label: node.label,
-    type: getNodeType(node),
-    data: node as unknown as Record<string, unknown>,
-    style: {
-      fill: typeColorMap[node.type] || '#64748b',
-      stroke: sourceColorMap[node.source] || '#94a3b8',
-      lineWidth: 2,
-      r: 20 + (node.frequency || 1) * 2,
-      shape: shapeMap[node.type] || 'circle',
-    },
-  }))
+    return {
+      id: node.id,
+      label: node.label,
+      data: node as unknown as Record<string, unknown>,
+      style: {
+        fill: sourceColorMap[node.source] || '#64748b',
+        stroke: '#ffffff',
+        lineWidth: 1,
+        r,
+        labelText: '',
+        labelFill: '#1e293b',
+        labelFontSize: 9,
+        labelFontWeight: 600,
+        labelOffset: 2,
+      },
+    }
+  })
 
-  const edges = data.edges.map(edge => ({
-    source: edge.from_node,
-    target: edge.to_node,
-    label: edge.relation_type === 'prerequisite' ? '前置' : edge.relation_type === 'contains' ? '包含' : '关联',
-    style: {
-      stroke: edge.relation_type === 'associate' ? '#94a3b8' : '#64748b',
-      lineWidth: Math.max(1, edge.weight * 2),
-      lineDash: edge.relation_type === 'associate' ? [4, 4] : undefined,
-      endArrow: true,
-    },
-  }))
+  const edges = data.edges.map(edge => {
+    let stroke: string, lineWidth: number, lineDash: number[] | undefined
+    if (edge.relation_type === 'prerequisite') {
+      stroke = '#ef4444'; lineWidth = 2; lineDash = undefined
+    } else if (edge.relation_type === 'contains') {
+      stroke = '#22c55e'; lineWidth = 1.5; lineDash = undefined
+    } else {
+      stroke = '#94a3b8'; lineWidth = 1; lineDash = [4, 4]
+    }
+    return {
+      source: edge.from_node,
+      target: edge.to_node,
+      style: {
+        stroke,
+        lineWidth,
+        lineDash,
+        endArrow: true,
+      },
+    }
+  })
 
   return { nodes, edges }
 }
@@ -262,74 +277,50 @@ function initGraph() {
     container: containerRef.value,
     width: containerRef.value.clientWidth,
     height: containerRef.value.clientHeight,
-    autoFit: 'view',
+    fitView: true,
     layout: {
       type: 'force',
       preventOverlap: true,
-      nodeSize: 40,
+      nodeSpacing: 60,
       linkDistance: 120,
-      nodeStrength: -300,
-      edgeStrength: 0.2,
-      collide: true,
+      nodeStrength: -60,
+      edgeStrength: 0.3,
+      alpha: 0.2,
+      alphaDecay: 0.02,
+      alphaMin: 0.001,
+      clustering: false,
     },
-    plugins: [
-      {
-        type: 'legend',
-        position: 'top-right',
-        padding: [8, 12, 8, 12],
-        background: {
-          padding: [4, 8, 4, 4],
-          radius: 4,
-          fill: '#ffffff',
-          stroke: '#e2e8f0',
-        },
-      },
-      {
-        type: 'zoom-bar',
-        position: 'bottom-left',
-      },
-    ],
-    node: {
+    defaultNode: {
+      type: 'circle',
+      size: 30,
       style: {
-        labelText: (d: any) => d.label,
+        fill: '#64748b',
+        stroke: '#93c5fd',
+        lineWidth: 1.5,
+        labelText: '',
         labelFill: '#ffffff',
         labelFontSize: 10,
         labelFontWeight: 500,
-        lineWidth: 2,
-      },
-      state: {
-        active: {
-          strokeWidth: 3,
-          shadowColor: '#2563eb',
-          shadowBlur: 12,
-        },
-        selected: {
-          strokeWidth: 3,
-          stroke: '#f59e0b',
-          shadowColor: '#f59e0b',
-          shadowBlur: 12,
-        },
+        labelOffset: 4,
+        labelBackground: false,
       },
     },
-    edge: {
+    defaultEdge: {
+      type: 'line',
       style: {
-        labelText: (d: any) => d.label,
-        labelFill: '#94a3b8',
-        labelFontSize: 9,
-        labelBackground: true,
-        labelBackgroundFill: '#ffffff',
-        labelBackgroundOpacity: 0.8,
+        stroke: '#94a3b8',
+        lineWidth: 1,
         endArrow: true,
-        endArrowSize: 6,
       },
     },
-    behaviors: ['drag-canvas', 'zoom-canvas', 'drag-node', 'click-select'],
+    modes: {
+      default: ['drag-canvas', 'zoom-canvas', 'drag-node'],
+    },
+    plugins: [],
   })
 
-  graph.setData({ nodes, edges })
-
   graph.on('node:click', (e: any) => {
-    const nodeId = e.target?.id
+    const nodeId = e.item?.getID()
     const nodeData = graphData.value?.nodes.find(n => n.id === nodeId)
     selectedNode.value = nodeData || null
   })
@@ -342,6 +333,33 @@ function initGraph() {
     if (e.zoom) zoomLevel.value = Math.round(e.zoom * 100) / 100
   })
 
+  graph.on('node:mouseenter', (e: any) => {
+    const nodeId = e.item?.getID()
+    if (nodeId) {
+      graph.setItemState(nodeId, 'hover', true)
+      const nodeData = graphData.value?.nodes.find(n => n.id === nodeId)
+      if (nodeData) {
+        graph.updateItem(e.item, {
+          style: { labelText: nodeData.label, labelBackground: { fill: '#1e293b', fillOpacity: 0.85, radius: 4, padding: [4, 6, 4, 6] } },
+        })
+      }
+    }
+  })
+
+  graph.on('node:mouseleave', (e: any) => {
+    const nodeId = e.item?.getID()
+    if (nodeId) {
+      graph.setItemState(nodeId, 'hover', false)
+      const nodeData = graphData.value?.nodes.find(n => n.id === nodeId)
+      const degree = nodeData?.frequency || 1
+      const showLabel = degree >= 4
+      graph.updateItem(e.item, {
+        style: { labelText: showLabel ? (nodeData?.label || '') : '', labelBackground: showLabel ? null : undefined },
+      })
+    }
+  })
+
+  graph.data({ nodes, edges })
   graph.render()
 }
 
@@ -364,7 +382,20 @@ function handleFitView() {
 async function fetchGraph() {
   loading.value = true
   try {
-    graphData.value = await get<GraphData>('/graph')
+    const data = await get<GraphData>('/graph')
+    const edgeCount: Record<string, number> = {}
+    for (const e of data.edges) {
+      edgeCount[e.from_node] = (edgeCount[e.from_node] || 0) + 1
+      edgeCount[e.to_node] = (edgeCount[e.to_node] || 0) + 1
+    }
+    for (const n of data.nodes) {
+      n.frequency = edgeCount[n.id] || 1
+    }
+    const sorted = [...data.nodes].sort((a, b) => (edgeCount[b.id] || 0) - (edgeCount[a.id] || 0))
+    const topNodes = sorted.slice(0, 80)
+    const topIds = new Set(topNodes.map((n: KGNode) => n.id))
+    const filteredEdges = data.edges.filter((e: KGEdge) => topIds.has(e.from_node) && topIds.has(e.to_node))
+    graphData.value = { ...data, nodes: topNodes, edges: filteredEdges, total_nodes: topNodes.length }
   } catch {
     graphData.value = mockGraphData
   } finally {
@@ -377,8 +408,7 @@ let resizeObserver: ResizeObserver | null = null
 watch([searchQuery, selectedSources], () => {
   if (graph && filteredGraphData.value) {
     const { nodes, edges } = buildG6Data(filteredGraphData.value)
-    graph.setData({ nodes, edges })
-    graph.render()
+    graph.changeData(nodes, edges)
   }
 })
 
@@ -388,7 +418,7 @@ onMounted(async () => {
   if (containerRef.value) {
     resizeObserver = new ResizeObserver(() => {
       if (graph && containerRef.value) {
-        graph.resize(containerRef.value.clientWidth, containerRef.value.clientHeight)
+        // resize removed for G6 v4
       }
     })
     resizeObserver.observe(containerRef.value)

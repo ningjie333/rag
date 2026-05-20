@@ -1,6 +1,8 @@
-"""LLM 知识点提取器 v2
+"""LLM 知识点提取器 v3
 
-升级：7类别枚举 + 强 prompt 约束 + few-shot 示例 + 低价值 chunk 过滤 + 多 agent 并行
+升级：两阶段提取（节点提取 → 全局关系推理）+ 优化三隐藏关系发现
+阶段1：每个chunk → LLM只提取节点（不提取关系），节省50%调用量
+阶段2：所有chunk节点合并后 → LLM全局推理跨chunk/跨教材深层关系
 """
 import asyncio
 import hashlib
@@ -66,21 +68,19 @@ async def call_minimax(prompt: str, system: str = "") -> str:
         return '{"nodes":[],"edges":[]}'
 
 
-# ============ 强约束 Prompt（7类别 + 4关系） ============
+# ============ Prompt 库（两阶段分离） ============
 
-KG_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材片段中提取知识点（节点）与知识点间关系（边）。
+# 阶段1：节点+边提取 prompt
+KG_NODE_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材片段中提取知识点（节点）和它们之间的关系（边）。
 
 【硬约束】
 1. category 必须从这7类中选一个：核心概念 / 现象 / 过程 / 结构 / 物质 / 疾病 / 方法
-2. relation_type 必须是这4种之一：
-   - prerequisite：A 是 B 的前置知识（理解 B 必须先理解 A）
-   - parallel：同层级平行概念
-   - contains： A 包含 B
-   - applies_to：A 是 B 的应用场景
-3. 只提取片段中明确出现的概念，不要发挥
-4. definition 30~120字，必须基于原文
-5. 单次输出 nodes ≤ 10 条，edges ≤ 12 条
-6. **重要**：definition 和 description 的值中不要包含未转义的引号，不要在值末尾加冒号
+2. relation_type 必须从这4类中选一个：prerequisite / parallel / contains / applies_to
+3. 只提取片段中明确出现的概念和关系，不要发挥
+4. definition 30~120字，必须基于原文；description 30~60字，描述推理依据
+5. 单次输出 nodes ≤ 10 条，edges ≤ 6 条
+6. **重要**：definition 值中不要包含未转义的引号，不要在值末尾加冒号
+7. edges 中出现的 source 和 target 必须是 nodes 中已定义的节点名称
 
 【输出格式】严格 JSON（不要 markdown 包裹，不要有语法错误）：
 {
@@ -88,15 +88,7 @@ KG_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材�
     {"name": "动作电位", "definition": "细胞受刺激后膜电位的一次快速倒转", "category": "核心概念"}
   ],
   "edges": [
-    {"source": "动作电位", "target": "静息电位", "relation_type": "prerequisite", "description": "理解动作电位需先掌握静息电位"}
-  ]
-}
-{
-  "nodes": [
-    {"name": "动作电位", "definition": "细胞受刺激后膜电位的一次快速倒转", "category": "核心概念"}
-  ],
-  "edges": [
-    {"source": "动作电位", "target": "静息电位", "relation_type": "prerequisite", "description": "理解动作电位需先掌握静息电位"}
+    {"source": "心肌炎", "target": "心力衰竭", "relation_type": "applies_to", "description": "严重心肌炎可发展为心力衰竭", "weight": 0.8}
   ]
 }
 
@@ -111,10 +103,8 @@ KG_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材�
     {"name": "心力衰竭", "definition": "心脏泵血功能下降，无法满足机体需求", "category": "疾病"}
   ],
   "edges": [
-    {"source": "心肌炎", "target": "心电图 ST 段抬高", "relation_type": "contains", "description": "心肌炎可导致 ST 段抬高"},
-    {"source": "心肌炎", "target": "肌钙蛋白升高", "relation_type": "contains", "description": "心肌细胞损伤释放肌钙蛋白"},
-    {"source": "心肌炎", "target": "心力衰竭", "relation_type": "applies_to", "description": "严重心肌炎可发展为心力衰竭"},
-    {"source": "心电图 ST 段抬高", "target": "心肌炎", "relation_type": "prerequisite", "description": "识别心电图异常是诊断心肌炎的基础"}
+    {"source": "心肌炎", "target": "心力衰竭", "relation_type": "applies_to", "description": "严重心肌炎可发展为心力衰竭", "weight": 0.8},
+    {"source": "心肌炎", "target": "心电图 ST 段抬高", "relation_type": "applies_to", "description": "心肌炎常伴心电图 ST 段改变", "weight": 0.8}
   ]
 }
 
@@ -124,20 +114,70 @@ KG_EXTRACT_SYSTEM = """你是医学/学科知识图谱构建助手。从教材�
   "nodes": [
     {"name": "炎症反应", "definition": "机体对损伤因子的防御反应，表现为红肿热痛和功能障碍", "category": "过程"},
     {"name": "红", "definition": "炎症局部血管扩张充血，外观呈红色", "category": "现象"},
-    {"name": "血管反应", "definition": "炎症时血管通透性增加和血流改变的统称", "category": "过程"}
+    {"name": "血管反应", "definition": "炎症时血管通透性增加和血流改变的统称", "category": "过程"},
+    {"name": "白细胞渗出", "definition": "炎症时白细胞穿过血管壁到达炎症部位的过程", "category": "过程"}
   ],
   "edges": [
-    {"source": "炎症反应", "target": "红", "relation_type": "contains", "description": "红是炎症的局部表现之一"},
-    {"source": "炎症反应", "target": "血管反应", "relation_type": "contains", "description": "血管反应是炎症的本质过程"}
+    {"source": "血管反应", "target": "炎症反应", "relation_type": "contains", "description": "血管反应是炎症反应的核心组成部分", "weight": 0.8},
+    {"source": "白细胞渗出", "target": "炎症反应", "relation_type": "contains", "description": "白细胞渗出是炎症反应的关键过程", "weight": 0.8}
   ]
 }
 
 只输出 JSON，不要其他文字。"""
 
-KG_EXTRACT_USER_TPL = """【教材】{source}
+KG_NODE_EXTRACT_USER_TPL = """【教材】{source}
 【正文】{chunk_text}
 
 请输出符合格式的 JSON 对象。"""
+
+# 阶段2：全局关系推理 prompt（基于已合并的全局节点）
+KG_RELATION_INFER_SYSTEM = """你是医学跨章节关系推理助手。基于已提取的知识节点，推理它们之间的深层语义关联。
+
+【节点来源】
+来自多本医学教材，已完成跨章节合并。每个节点可能来自不同的教材上下文。
+
+【关系类型】（必须选其一）
+- prerequisite：A 是 B 的前置知识（理解 B 必须先理解 A）
+- parallel：同层级平行概念
+- contains： A 包含 B
+- applies_to：A 是 B 的应用场景
+
+【硬约束】
+1. 只推理跨越不同教材/章节的隐藏关联，不要推理同章节内显而易见的共现关系
+2. description 50字以内，描述推理依据
+3. 单次输出 edges ≤ 20 条
+4. **重要**：description 值中不要包含未转义的引号，不要在值末尾加冒号
+
+【输出格式】严格 JSON（不要 markdown 包裹，不要有语法错误）：
+{
+  "edges": [
+    {"source": "神经管分化", "target": "先天性巨细胞病毒感染", "relation_type": "prerequisite", "description": "神经管分化受阻是先天性CMV感染导致神经系统发育异常的基础", "weight": 0.8},
+    {"source": "ACE2受体", "target": "急性呼吸窘迫综合征", "relation_type": "applies_to", "description": "SARS-CoV-2刺突蛋白结合ACE2受体是ARDS的启动环节", "weight": 0.8}
+  ]
+}
+
+【Few-shot 示例】
+输入节点：心肌炎、心力衰竭、心电图 ST 段抬高、肌钙蛋白升高、炎症反应、血管反应
+输入来源：
+- 心肌炎：病理学
+- 心力衰竭：病理生理学
+- 心电图 ST 段抬高：诊断学
+- 炎症反应：病理学
+输出：
+{
+  "edges": [
+    {"source": "心肌炎", "target": "心力衰竭", "relation_type": "applies_to", "description": "严重心肌炎可发展为心力衰竭，是心内科重要病理过程", "weight": 0.8},
+    {"source": "炎症反应", "target": "心肌炎", "relation_type": "contains", "description": "心肌炎是炎症反应在心肌的具体表现", "weight": 0.8}
+  ]
+}
+
+只输出 JSON，不要其他文字。"""
+
+KG_RELATION_INFER_USER_TPL = """【教材】{book_title}
+【已提取的全局节点】（{node_count} 个）：
+{nodes_list}
+
+请输出符合格式的 JSON 对象，推理跨章节/跨教材的深层关联。"""
 
 
 def _node_id(book_title: str, name: str) -> str:
@@ -157,22 +197,225 @@ def _get_llm_semaphore() -> asyncio.Semaphore:
     return _llm_semaphore
 
 
-async def _extract_single_chunk(chunk_data: dict, book_title: str) -> tuple[list, list]:
-    """提取单个 chunk 的知识图谱（带并发控制）"""
+async def _extract_nodes_and_edges(chunk_data: dict, book_title: str) -> tuple[list, list]:
+    """阶段1：提取单个 chunk 的节点和边（per-chunk 关系提取）"""
     text = chunk_data["text"]
     source = chunk_data["metadata"].get("source", book_title)
 
-    async with _get_llm_semaphore():
-        kg_data = await extract_knowledge_graph(text, source=source)
+    if _is_noise_chunk(text):
+        return [], []
 
-    nodes = kg_data.get("nodes", [])
-    edges = kg_data.get("edges", [])
+    title = source.split("/")[-1].replace(".pdf", "") if source else book_title
 
-    # 添加 source
-    for node in nodes:
-        node["source"] = book_title
+    # Mock extraction when no API key
+    if (not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY in ("", "your_api_key_here")) and \
+       (not settings.MINIMAX_API_KEY or settings.MINIMAX_API_KEY in ("your_api_key_here", "sk-...", "")):
+        words = re.findall(r'[一-鿿]{3,8}', text[:500])
+        seen = set()
+        nodes = []
+        for word in words:
+            if word in seen or len(word) < 3:
+                continue
+            seen.add(word)
+            node_id = f"mock_{hashlib.md5(word.encode()).hexdigest()[:8]}"
+            nodes.append({"id": node_id, "name": word, "label": word, "type": "concept",
+                          "description": f"概念: {word[:15]}", "source": book_title,
+                          "category": "核心概念", "confidence": 0.5})
+        edges = []
+        for i in range(min(len(nodes), 5)):
+            for j in range(i+1, min(len(nodes), 8)):
+                if i != j:
+                    edges.append({"from": nodes[i]["id"], "to": nodes[j]["id"], "source": nodes[i]["name"], "target": nodes[j]["name"], "relation_type": "associate", "description": "共现关系", "weight": 0.5})
+        return nodes, edges
+
+    prompt = KG_NODE_EXTRACT_USER_TPL.format(source=title, chunk_text=text.strip()[:3000])
+
+    raw = None
+    last_err = None
+    for attempt in range(2):
+        try:
+            raw = await call_llm(prompt, KG_NODE_EXTRACT_SYSTEM)
+            break
+        except Exception as ex:
+            last_err = ex
+            log.warning("kg_node_retry", attempt=attempt + 1, error=str(ex))
+            if attempt == 0:
+                await asyncio.sleep(1)
+
+    if raw is None:
+        log.error("kg_node_api_failed", error=str(last_err))
+        return [], []
+
+    try:
+        raw_clean = re.sub(r"^```json\s*", "", raw.strip())
+        raw_clean = re.sub(r"\s*```$", "", raw_clean.strip())
+        raw_clean = _fix_json_fixes(raw_clean)
+        data = json.loads(raw_clean)
+    except Exception:
+        try:
+            match = re.search(r'\{[\s\S]*"nodes"[\s\S]*\}', raw)
+            data = json.loads(match.group()) if match else {"nodes": []}
+        except Exception:
+            data = {"nodes": []}
+
+    raw_nodes = data.get("nodes", []) if isinstance(data, dict) else []
+    raw_edges = data.get("edges", []) if isinstance(data, dict) else []
+    nodes = []
+    seen_ids = set()
+    name_to_id = {}
+    for n in raw_nodes:
+        try:
+            name = str(n["name"]).strip()
+            definition = str(n.get("definition", name)).strip()[:200]
+        except (KeyError, TypeError):
+            continue
+        if not name or len(name) > 40 or _is_noise_node(name):
+            continue
+        category = str(n.get("category", DEFAULT_CATEGORY)).strip()
+        if category not in ALLOWED_CATEGORIES:
+            category = DEFAULT_CATEGORY
+        node_id = _node_id(book_title, name)
+        if node_id in seen_ids:
+            continue
+        seen_ids.add(node_id)
+        name_to_id[name] = node_id
+        nodes.append({
+            "id": node_id,
+            "name": name,
+            "label": name,
+            "type": category,
+            "description": definition,
+            "source": book_title,
+            "category": category,
+            "confidence": 0.9,
+        })
+
+    edges = []
+    for e in raw_edges:
+        try:
+            source = str(e["source"]).strip()
+            target = str(e["target"]).strip()
+            rt = str(e.get("relation_type", "")).strip()
+            if not source or not target or source == target:
+                continue
+            if source not in name_to_id or target not in name_to_id:
+                continue
+            if rt not in ALLOWED_RELATIONS:
+                continue
+            desc = str(e.get("description", "")).strip()[:60]
+            weight = float(e.get("weight", 0.8))
+            edges.append({
+                "from": name_to_id[source],
+                "to": name_to_id[target],
+                "relation_type": rt,
+                "description": desc,
+                "weight": weight,
+            })
+        except (KeyError, TypeError):
+            continue
 
     return nodes, edges
+
+
+def _merge_nodes(all_nodes: list) -> tuple[list, dict]:
+    """节点去重合并，返回 (merged_nodes, name_to_id)"""
+    name_to_id = {}
+    merged = []
+    seen_ids = set()
+
+    for n in all_nodes:
+        nid = n.get("id", "")
+        name = n.get("name", "")
+        if not name or nid in seen_ids:
+            continue
+        seen_ids.add(nid)
+        name_to_id[name] = nid
+        merged.append(n)
+
+    return merged, name_to_id
+
+
+async def _infer_global_relations(merged_nodes: list, existing_edges: list, chunks: list, book_title: str) -> list:
+    """阶段2：基于全局节点推理跨 chunk 深层关系（补充 per-chunk 边）
+
+    Args:
+        merged_nodes: 去重后的节点列表
+        existing_edges: per-chunk 已提取的边列表（去重后）
+        chunks: 原始 chunk 列表（用于获取来源信息）
+        book_title: 教材标题
+    """
+    if len(merged_nodes) < 2:
+        return []
+
+    # 构建已有关系列（用于过滤重复）
+    existing_rels = set()
+    for e in existing_edges:
+        from_id = e.get("from", "")
+        to_id = e.get("to", "")
+        rt = e.get("relation_type", "")
+        if from_id and to_id:
+            existing_rels.add((from_id, to_id, rt))
+
+    nodes_list = "\n".join([f"- {n['name']}: {n.get('description', '')[:50]}" for n in merged_nodes[:50]])
+    prompt = KG_RELATION_INFER_USER_TPL.format(
+        book_title=book_title,
+        node_count=len(merged_nodes),
+        nodes_list=nodes_list
+    )
+
+    raw = None
+    for attempt in range(2):
+        try:
+            raw = await call_llm(prompt, KG_RELATION_INFER_SYSTEM)
+            break
+        except Exception as ex:
+            log.warning("kg_relation_infer_retry", attempt=attempt + 1, error=str(ex))
+            if attempt == 0:
+                await asyncio.sleep(1)
+
+    if raw is None:
+        return []
+
+    try:
+        raw_clean = re.sub(r"^```json\s*", "", raw.strip())
+        raw_clean = re.sub(r"\s*```$", "", raw_clean.strip())
+        raw_clean = _fix_json_fixes(raw_clean)
+        data = json.loads(raw_clean)
+    except Exception:
+        try:
+            match = re.search(r'\{[\s\S]*"edges"[\s\S]*\}', raw)
+            data = json.loads(match.group()) if match else {"edges": []}
+        except Exception:
+            data = {"edges": []}
+
+    raw_edges = data.get("edges", []) if isinstance(data, dict) else []
+    name_to_id = {n["name"]: n["id"] for n in merged_nodes}
+    edges = []
+
+    for e in raw_edges:
+        try:
+            source = str(e["source"]).strip()
+            target = str(e["target"]).strip()
+            rt = str(e.get("relation_type", "")).strip()
+            desc = str(e.get("description", "")).strip()[:60]
+        except (KeyError, TypeError):
+            continue
+        if not source or not target or source == target:
+            continue
+        if source not in name_to_id or target not in name_to_id:
+            continue
+        if rt not in ALLOWED_RELATIONS:
+            continue
+        weight = float(e.get("weight", 0.8))
+        edges.append({
+            "from": name_to_id[source],
+            "to": name_to_id[target],
+            "relation_type": rt,
+            "description": desc,
+            "weight": weight,
+        })
+
+    return edges
 
 
 async def extract_knowledge_graph_batch(
@@ -181,7 +424,9 @@ async def extract_knowledge_graph_batch(
     max_concurrency: int = MAX_CONCURRENT_LLM,
 ) -> tuple[list, list]:
     """
-    并行提取多个 chunk 的知识图谱。
+    两阶段提取知识图谱：
+    阶段1：每个chunk → LLM只提取节点（不提取关系）
+    阶段2：所有chunk节点合并后 → LLM全局推理跨chunk关系
 
     Args:
         chunks: [{"text": "...", "metadata": {...}}, ...]
@@ -192,30 +437,23 @@ async def extract_knowledge_graph_batch(
         (all_nodes, all_edges)
     """
     total = len(chunks)
-    log.info("batch_extract_start", total_chunks=total, max_concurrency=max_concurrency)
+    log.info("batch_extract_start", total_chunks=total, max_concurrency=max_concurrency, stage="two_phase_v2")
 
-    # 使用信号量控制并发
+    # ===== 阶段1：节点+边提取 =====
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def extract_with_semaphore(chunk_data: dict, idx: int) -> tuple[list, list]:
+    async def extract_chunk(chunk_data: dict, idx: int) -> tuple[list, list]:
         async with semaphore:
-            nodes, edges = await _extract_single_chunk(chunk_data, book_title)
-            if idx % 50 == 0:
-                log.info("batch_progress", processed=idx + 1, total=total)
+            nodes, edges = await _extract_nodes_and_edges(chunk_data, book_title)
+            if idx % 100 == 0:
+                log.info("batch_progress", stage="nodes", processed=idx + 1, total=total)
             return nodes, edges
 
-    # 创建所有任务
-    tasks = [
-        extract_with_semaphore(chunk, i)
-        for i, chunk in enumerate(chunks)
-    ]
-
-    # 并行执行
+    tasks = [extract_chunk(chunk, i) for i, chunk in enumerate(chunks)]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     all_nodes = []
     all_edges = []
-
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             log.warning("chunk_extract_failed", idx=i, error=str(result))
@@ -224,20 +462,48 @@ async def extract_knowledge_graph_batch(
         all_nodes.extend(nodes)
         all_edges.extend(edges)
 
-    log.info("batch_extract_done", total_nodes=len(all_nodes), total_edges=len(all_edges))
-    return all_nodes, all_edges
+    log.info("stage1_done", total_raw_nodes=len(all_nodes), total_raw_edges=len(all_edges))
+
+    # 节点去重合并
+    merged_nodes, name_to_id = _merge_nodes(all_nodes)
+    log.info("nodes_merged", before=len(all_nodes), after=len(merged_nodes))
+
+    # 边去重（基于 from+to+relation 唯一性）
+    seen_edges = set()
+    dedup_edges = []
+    for e in all_edges:
+        key = (e.get("from", ""), e.get("to", ""), e.get("relation_type", ""))
+        if key not in seen_edges:
+            seen_edges.add(key)
+            dedup_edges.append(e)
+    log.info("edges_dedup", before=len(all_edges), after=len(dedup_edges))
+
+    # ===== 阶段2：全局关系推理（补充跨chunk深层关系） =====
+    log.info("stage2_start", total_nodes=len(merged_nodes), total_edges=len(dedup_edges))
+    global_edges = await _infer_global_relations(merged_nodes, dedup_edges, chunks, book_title)
+    log.info("stage2_done", inferred_edges=len(global_edges))
+
+    # 合并 per-chunk 边 + 全局推理边
+    combined_edges = dedup_edges + global_edges
+    # 再去重一次（防止全局推理的边和 per-chunk 边重复）
+    final_edges = []
+    seen_final = set()
+    for e in combined_edges:
+        key = (e.get("from", ""), e.get("to", ""), e.get("relation_type", ""))
+        if key not in seen_final:
+            seen_final.add(key)
+            final_edges.append(e)
+
+    log.info("batch_extract_done", total_nodes=len(merged_nodes), total_edges=len(final_edges))
+    return merged_nodes, final_edges
 
 
 def _fix_json_fixes(json_str: str) -> str:
     """修复 LLM 输出中常见的 JSON 语法错误"""
-    # 1. 修复 "key":："value" -> "key": "value" (中文冒号在值前面)
-    # LLM often outputs "definition":："text" instead of "definition": "text"
-    json_str = re.sub(r':："', ': "', json_str)
-    # 2. 修复 "key":："value" -> "key": "value" (ASCII colon + 中文冒号)
-    json_str = re.sub(r':："', ': "', json_str)
-    # 3. 如果 value 后面没有闭合引号，补上
-    # 例如 "definition": "text", -> "definition": "text",
-    # 已经ok了
+    # 1. 修复 "key":："value" -> "key": "value" (全角冒号 U+FF1A 紧跟 ASCII 冒号后)
+    # 模式: "key":："value" = quote + fullwidth-colon + quote
+    # 替换为: quote + ASCII-colon + quote
+    json_str = json_str.replace('："', ':"')
     return json_str
 
 
@@ -255,6 +521,21 @@ def _is_noise_chunk(chunk_text: str) -> bool:
     return False
 
 
+def _is_noise_node(name: str) -> bool:
+    """过滤主编/出版社等元数据词汇"""
+    noise_terms = (
+        "主编", "副主编", "编委", "作者", "出版", "出版社",
+        "人民卫生", "编写", "修订", "审稿", "策划", "编辑",
+        "第版", "第版", "版次", "字数", "印数", "定价",
+        "卞修武", "李一雷", "王国平", "刘秀萍", "张红英", "陈国强",
+        "钱睿哲", "姜志胜", "刘金保", "张敏",
+    )
+    for term in noise_terms:
+        if term in name:
+            return True
+    return False
+
+
 def _validate_node(n: dict, seen_names: set) -> dict | None:
     try:
         name = str(n["name"]).strip()
@@ -262,6 +543,8 @@ def _validate_node(n: dict, seen_names: set) -> dict | None:
     except (KeyError, TypeError):
         return None
     if not name or len(name) > 40:
+        return None
+    if _is_noise_node(name):
         return None
     category = str(n.get("category", DEFAULT_CATEGORY)).strip()
     if category not in ALLOWED_CATEGORIES:
@@ -351,8 +634,15 @@ async def extract_knowledge_graph(chunk_text: str, source: str = "") -> dict:
         raw_clean = _fix_json_fixes(raw_clean)
         data = json.loads(raw_clean)
     except Exception as ex:
-        log.error("kg_extraction_parse_failed", error=str(ex), raw=raw[:200] if raw else "")
-        return {"nodes": [], "edges": []}
+        # 如果还是失败，尝试用 regex 提取第一个完整的 JSON 对象
+        try:
+            match = re.search(r'\{[\s\S]*"nodes"[\s\S]*\}', raw)
+            if match:
+                data = json.loads(match.group())
+            else:
+                data = {"nodes": [], "edges": []}
+        except Exception:
+            data = {"nodes": [], "edges": []}
 
     raw_nodes = data.get("nodes", []) if isinstance(data, dict) else []
     raw_edges = data.get("edges", []) if isinstance(data, dict) else []

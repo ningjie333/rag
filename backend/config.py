@@ -9,8 +9,8 @@ DATA_DIR = BASE_DIR / "data"
 CHROMA_DIR = DATA_DIR / "chroma_db"
 CHROMA_DIR.mkdir(exist_ok=True)
 
-# 加载项目根目录的 .env (scaffold 目录下)
-load_dotenv(BASE_DIR / ".env")
+# 加载 backend/.env
+load_dotenv(BASE_DIR / "backend" / ".env")
 
 class Settings(BaseSettings):
     # LLM Provider: openai, minimax
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     COLLECTION_CHUNKS: str = "textbook_chunks"
     COLLECTION_KG: str = "knowledge_graph"
     CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 50
+    CHUNK_OVERLAP: int = 150  # 30%，边界概念多一次出现机会，降低跨chunk关系丢失率
     TOP_K: int = 5
 
     # Data directories

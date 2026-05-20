@@ -1,6 +1,8 @@
 """GET /api/graph — 知识图谱查询 & 构建"""
 import asyncio
+import json
 import structlog
+from pathlib import Path
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 
@@ -8,9 +10,143 @@ from models.schemas import GraphResponse, KGNode, KGEdge
 from vector_store.kg_extractor import extract_knowledge_graph, extract_knowledge_graph_batch, store_knowledge_graph, get_full_graph
 from vector_store.relation_inferrer import infer_all_relations, remove_cycles, merge_duplicate_concepts, dual_align_concepts
 from vector_store.chroma_client import get_or_create_collection
+from config import settings, BASE_DIR
 
 router = APIRouter()
 log = structlog.get_logger()
+
+# 已有的离线图谱 JSON 文件目录
+EXPORT_INDIVIDUAL_DIR = BASE_DIR / "export_output" / "individual"
+
+
+# Known non-medical noise terms from PDF front matter
+NOISE_TERMS = {
+    # Awards & honors
+    "科学进步奖", "教学成果奖", "一等奖", "二等奖", "优秀奖", "获奖",
+    # Publishing staff (编委会页)
+    "编委", "主编", "副主编", "审定", "批准", "编写说明", "前言", "序言",
+    "出版说明", "编辑说明", "声明", "版权所有", "版权信息", "版权页",
+    "编者", "编委名单", "编著", "编写", "主编寄语",
+    # Administrative/pedagogical terms (教材前言/编委会混入)
+    "教材建设", "教材精品", "教材提质", "教材管理", "规划教材", "教材办法",
+    "课程思政", "教育数字化", "数字资源", "数字人", "三维模型", "思维导图",
+    "电子教材", "纸数融合", "新形态教材", "套色线条图",
+    "立德树人", "守正创新", "医者精神", "三基", "五性", "三特定", "两性一度",
+    "医德医风", "数字内容", "医学教育",
+    # Book/meeting names that are administrative
+    "干细胞教材", "首届全国教材工作会议", "临床医学专业教材评审", "教材工作会议",
+    "党的教育方针", "医学教育改革发展", "深化医教协同", "加快医学教育创新",
+    "高校思想政治工作", "全国高校思想政治工作会议",
+    # Common textbook administrative terms across all books
+    "五年制本科", "本科教育", "教学工作", "教育工作", "核心教材",
+    "形态教材", "纸质教材", "在线课程", "重点人群", "健康教育", "性卫生教育",
+    "教材体系", "患沟通", "教育部", "变革的思维", "探索教育", "教材",
+    # Political/governance terms
+    "新时代中国特色社会主义", "习近平", "马克思主义", "社会主义", "共产主义",
+    "帝国主义", "资本主义", "封建主义", "民族主义", "民粹主义",
+    "恐怖主义",
+    # Administrative awards & programs (人才/工程/进步/计划 + award-like combos)
+    "科技进步奖", "科学技术进步奖", "教学成果奖", "优秀人才", "人才工程", "人才支持计划",
+    "科技新星计划", "百千万人才", "基金委员会", "自然科学基金", "重大研究计划", "重大研究专项", "重点基金", "科技部",
+    # Glossary/index terms
+    "名词", "中英文对照", "索引",
+    # Administrative/legal/governance terms
+    "中华优秀传统文化", "生物安全法", "法定计量单位", "中华人民共和国",
+    # Generic standalone noise terms
+    "计划", "工程",
+    # Known person names from book front matter (编委会)
+    "钱亦华", "张卫光", "张雅芳", "丁强", "武艳", "王启明", "欧阳钧",
+    # Non-medical methodology/admin terms
+    "周围区", "高热", "观察", "外科学", "妇产科学", "结构观察", "解剖器械", "自主学习", "人体分部", "解剖刀",
+    # Abbreviations that are too generic in medical context
+    "DICOM", "PET", "CT",
+}
+
+def _is_noise_node(label: str) -> bool:
+    """Check if a node label is a known non-medical noise term."""
+    if not label:
+        return True
+    for term in NOISE_TERMS:
+        if term in label:
+            return True
+    return False
+
+
+def _load_graph_from_json_files(book_title: str | None = None) -> dict:
+    """
+    从 export_output/individual/*.json 读取图谱数据作为后备。
+    合并所有有效的 individual JSON 文件（有节点且节点数 > 0 的）。
+
+    节点 ID 统一为短格式：{书名}_{概念名[:20]}
+    边引用同步更新为新 ID，以正确连接节点。
+    """
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    scan_dir = EXPORT_INDIVIDUAL_DIR
+
+    if not scan_dir.is_dir():
+        log.warning("export_output individual dir not found", path=str(scan_dir))
+        return {"nodes": [], "edges": []}
+
+    json_files = list(scan_dir.glob("*_知识图谱.json"))
+    log.info("loading_graph_from_json", file_count=len(json_files), book_title=book_title)
+
+    for json_file in json_files:
+        # 从文件名提取书名，如 "01_局部解剖学_知识图谱.json" → "01_局部解剖学"
+        file_stem = json_file.stem.replace("_知识图谱", "")
+        if book_title and file_stem != book_title:
+            continue
+
+        try:
+            with open(json_file, encoding="utf-8") as f:
+                data = json.load(f)
+
+            file_nodes = data.get("nodes", [])
+            file_edges = data.get("edges", [])
+
+            # 跳过 0 节点的失败文件（如 05/07 扫描版 PDF）
+            if not file_nodes:
+                log.info("skipping_empty_json", file=str(json_file))
+                continue
+
+            # 记录旧 ID → 新 ID 的映射（同一个概念跨文件取第一个）
+            old_to_new: dict[str, str] = {}
+            for n in file_nodes:
+                old_id = n.get("id", "")
+                n_name = n.get("name") or n.get("label", "")
+                safe_id = f"{file_stem}_{n_name[:20]}"
+                n["id"] = safe_id
+                if old_id and old_id not in old_to_new:
+                    old_to_new[old_id] = safe_id
+
+            # 更新边引用
+            for e in file_edges:
+                old_from = e.get("from", "")
+                old_to = e.get("to", "")
+                e["from"] = old_to_new.get(old_from, old_from)
+                e["to"] = old_to_new.get(old_to, old_to)
+
+            nodes.extend(file_nodes)
+            edges.extend(file_edges)
+            log.info("loaded_json_file", file=str(json_file), nodes=len(file_nodes), edges=len(file_edges))
+        except Exception as e:
+            log.warning("failed_to_load_json", file=str(json_file), error=str(e))
+            continue
+
+    # 过滤噪声节点（出版信息、奖项等非医学内容）
+    before_nodes = len(nodes)
+    nodes = [n for n in nodes if not _is_noise_node(n.get("name") or n.get("label", ""))]
+    removed_noise = before_nodes - len(nodes)
+    log.info("filtered_noise_nodes", removed=removed_noise)
+
+    # 过滤无效边（引用了不存在节点的边）
+    node_ids = {n["id"] for n in nodes}
+    before_edges = len(edges)
+    edges = [e for e in edges if e.get("from") in node_ids and e.get("to") in node_ids]
+    log.info("filtered_invalid_edges", before=before_edges, after=len(edges), removed=before_edges - len(edges))
+
+    log.info("graph_from_json_total", nodes=len(nodes), edges=len(edges))
+    return {"nodes": nodes, "edges": edges}
 
 
 @router.get("/graph", response_model=GraphResponse)
@@ -18,11 +154,26 @@ async def get_graph(book_title: Optional[str] = Query(None)):
     """
     返回知识图谱的 nodes + edges。
     book_title 为空则返回所有。
+
+    优先从 FAISS 存储读取；若 FAISS 为空则 fallback 到 export_output JSON 文件。
+    全量 27000+ 节点前端渲染困难，空参数时默认加载"01_局部解剖学"。
     """
+    # 全量数据太大，默认只加载一本书
+    if not book_title:
+        book_title = "01_局部解剖学"
+        log.info("no_book_title_defaulting", default=book_title)
     log.info("graph_request", book_title=book_title)
 
     try:
+        # 先尝试从 FAISS 存储读取
         graph_data = get_full_graph(book_title)
+
+        # FAISS 为空或无有效边时 fallback 到已有 JSON 文件
+        # mock 数据有 0 条边，而真实数据 edges > 0
+        if not graph_data.get("nodes") or len(graph_data.get("edges", [])) == 0:
+            log.info("faiss_empty_using_json_fallback", faiss_nodes=len(graph_data.get("nodes", [])), faiss_edges=len(graph_data.get("edges", [])))
+            graph_data = _load_graph_from_json_files(book_title)
+
         # 转换节点格式以匹配 KGNode schema
         raw_nodes = graph_data.get("nodes", [])
         nodes = []
@@ -34,7 +185,16 @@ async def get_graph(book_title: Optional[str] = Query(None)):
                 "description": n.get("definition", n.get("description", "")),
                 "source": n.get("source", book_title or ""),
             })
-        edges = [KGEdge(**e) for e in graph_data.get("edges", [])]
+        # 转换 edges：JSON 文件用 from/to，schema 用 from_node/to_node
+        raw_edges = graph_data.get("edges", [])
+        edges = []
+        for e in raw_edges:
+            edges.append(KGEdge(
+                from_node=e.get("from", e.get("from_node", "")),
+                to_node=e.get("to", e.get("to_node", "")),
+                relation_type=e.get("relation_type", "associate"),
+                weight=e.get("weight", 0.8),
+            ))
 
         return GraphResponse(
             nodes=nodes,
